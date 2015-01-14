@@ -1,0 +1,1252 @@
+% \VignetteIndexEntry{An R package for sequence}
+\documentclass{article}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{amsmath}
+\usepackage{times}
+\usepackage{titlesec}
+\usepackage{sidecap}
+\usepackage{float}
+\usepackage{rotating}
+
+%%%add more package for tables
+\usepackage[table]{xcolor}
+\usepackage[margin=1in]{geometry}
+\usepackage{tabularx}
+\usepackage{enumitem}
+
+
+%%%
+
+\textwidth=6.8in
+\textheight=9in
+%\parskip=.3cm
+\oddsidemargin=.1in
+\evensidemargin=.1in
+\headheight=-.5in
+
+\usepackage{titlesec}
+
+\setcounter{secnumdepth}{4}
+
+\titleformat{\paragraph}
+{\normalfont\normalsize\bfseries}{\theparagraph}{1em}{}
+\titlespacing*{\paragraph}
+{0pt}{3.25ex plus 1ex minus .2ex}{1.5ex plus .2ex}
+
+%------------------------------------------------------------
+% newcommand
+%------------------------------------------------------------
+\newcommand{\scscst}{\scriptscriptstyle}
+\newcommand{\scst}{\scriptstyle}
+\newcommand{\Robject}[1]{{\texttt{#1}}}
+\newcommand{\Rfunction}[1]{{\texttt{#1}}}
+\newcommand{\Rclass}[1]{\textit{#1}}
+\newcommand{\Rpackage}[1]{\textit{#1}}
+\newcommand{\Rexpression}[1]{\texttt{#1}}
+\newcommand{\Rmethod}[1]{{\texttt{#1}}}
+\newcommand{\Rfunarg}[1]{{\texttt{#1}}}
+
+%%%
+\renewcommand{\familydefault}{\sfdefault}
+\renewcommand{\arraystretch}{1.5}
+
+%%%
+
+\begin{document}
+\SweaveOpts{concordance=TRUE}
+
+%------------------------------------------------------------
+\title{seq2pathway Vignette}
+%------------------------------------------------------------
+\author{Bin Wang, Xinan (Holly) Yang}
+%\date{}
+
+\SweaveOpts{highlight=TRUE, tidy=TRUE, keep.space=TRUE, keep.blank.space=FALSE, keep.comment=TRUE}
+\SweaveOpts{prefix.string=Fig}
+
+
+\maketitle
+\tableofcontents
+
+%section1: abstract
+%-------------------------------------------
+\section{Abstract}
+%--------------------------------------------
+
+  \texttt{Seq2pathway} is a novel computational tool to analyze functional gene-sets (including signaling pathways) using variable next-generation sequencing data. Integral to this tool are the ``seq2gene'' and ``gene2pathway'' components in series that infer a quantitative pathway-level profile for each sample. The \texttt{seq2gene} function assigns phenotype-associated significance of genomic regions to gene-level scores, where the significance could be p-values of SNPs or point mutations, protein-binding affinity, or transcriptional expression level. The \texttt{seq2gene} function has the feasibility to assign non-exon regions to a range of neighboring genes besides the nearest one, thus facilitating the study of functional non-coding elements\cite{yang14}. Then the \texttt{gene2pathway} summarizes gene-level measurements to pathway-level scores, comparing the quantity of significance for gene members within a pathway with those outside a pathway. It implements an improved FAIME algorithm together with other three conventional gene-set enrichment analysis methods\cite{yang12}. The output of \texttt{seq2pathway} is a general structured pathway scores, thus allowing one to functionally interpret phenotype-associated significance of genomic regions derived by next generational sequencing experiments.   
+
+%section2: installation
+%-------------------------------------------
+\section{Package Installation}
+%--------------------------------------------
+
+Currently, \texttt{seq2pathway}  works in both \texttt{Linux} and \texttt{Windows}. It has wrapped python scripts to annotate loci to genes, thus requires Python v2.7 running on the system. For Windows, the Python should be installed at ``C:/python27/python'' (default). Make sure supporting data package \texttt{seq2pathway.data} is installed with \texttt{seq2pathway} package. 
+
+
+    \begin{verbatim}
+    > setwd("where you put the source file of the package")
+    # load dependent packages
+    > library(c("dynamicTreeCut","flashClust","WGCNA","GSA","impute")) 
+    # load seq2pathway reference data package
+    > library("seq2pathway.data") 
+    > install.packages("seq2pathway_1.0.tar.gz", repos = NULL, type="source", 
+      lib="where you want to install the package")
+    > library(seq2pathway, lib.loc="where you have installed the package")
+    > lsf.str("package:seq2pathway") # check the available functions
+    \end{verbatim}
+    
+%section3: runseq2pathway function    
+%-------------------------------------------
+\section{runseq2pathway}
+%--------------------------------------------
+  This function provides end-users a straightforward work-flow to implement the seq2pathway algorithms.  It facilitates the screening of novel biological functions using just a few code lines, the main function to derive enriched pathways from genomic regions. It uses the Gene Ontology (GO)-defined gene-sets by default and can be run against either the MSigDB-defined\cite{Liberzon11} or customized gene-sets.
+
+
+\begin{verbatim}
+> runseq2pathway(inputfile,   
+    search_radius=150000, promoter_radius=200, genome=c("hg19","mm10","mm9"),
+    adjacent=FALSE, SNP= FALSE, PromoterStop=FALSE, NearestTwoDirection=TRUE,
+    DataBase=c("GOterm"), FAIMETest=FALSE, FisherTest=TRUE,
+    collapsemethod= c("MaxMean,"function", "ME", "maxRowVariance", "MinMean", "absMinMean",
+    "absMaxMean", "Average"),
+    alpha=5, B=100, na.rm=F, min_Intersect_Count=5)
+\end{verbatim}
+The inputs are almost the same as those introduced below for the the two main functions \texttt{runseq2gene} and \texttt{gene2pathway\_test}. We therefore only introduce the new parameters here.
+
+Note that the wrapped function \texttt{runseq2pathway} supports the ``FAIME'' method only and performs empirical test if the new parameter \texttt{FAMETest} equals to ``TRUE''.
+
+If setting \texttt{FAIMETest}=TRUE and/or calculating the empirical p-values, an end-user should provide the formatted input file (see following example). 
+  \begin{description}
+    \item[Column 1]{the unique IDs (labels) of genomic regions of interest}
+    \item[Column 2]{the chromosome IDs (eg. chr5 or 5)}
+    \item[Column 3]{the start of genomic regions of interest}
+    \item[Column 4]{the end of genomic regions (for SNP and point mutations, the difference of start and end is 1bp)}
+    \item[Column 5]{the scores or values of the sample(s) along with the genomic regions}
+    \item[Column \ldots]{other custom-defined information}
+  \end{description}
+
+Another new parameter \texttt{collapsemethod} is a character for determining which method to use when call the function \texttt{collapseRows} in package \texttt{WGCNA}\cite{Langfelder08}. 
+
+These are the options provided by \texttt{WGCNA} for the parameter \texttt{collapsemethod}(directly from \texttt{WGCNA} Vignette):
+  \begin{description}
+    \item[``MaxMean'' (default) or ``MinMean'' ]{= choose the row with the highest or lowest mean value, respectively}
+    \item[``maxRowVariance'']{= choose the row with the highest variance (across the columns of data)}
+    \item[``absMaxMean'' or ``absMinMean'']{= choose the row with the highest or lowest mean absolute value}
+    \item[``ME'']{= choose the eigenrow (first principal component of the rows in each group)}
+    \item[``Average'']{for each column, take the average value of the rows in each group}
+    \item[``function'']{use this method for a user-input function (see the description of the argument ``methodFunction'')}
+  \end{description}
+
+%section4: 2 main functions
+%-------------------------------------------
+\section{Two main functions}
+%--------------------------------------------
+   The output of runseq2pathway can be achieved equally by running \texttt{runseq2gene} and \texttt{gene2pathway\_test} functions in series. These two functions facilitate end-users to track details on the gene-level. End-users can also apply the gene2pathway\_test function to analyze functional enrichment for customized gene lists independently.  
+   
+Here we introduce these two main functions separately. For each function, we describe the significance, its features with a flowchart, the inputs and parameters, then the output in details. 
+    \begin{description}
+      \item[``runseq2gene'']{The first components in series to map genomic regions to coding and non-coding genes\cite{yang14}. }
+      \item[``gene2pathway\_test'']{The second components in series to run pathway enrichment analysis for coding genes. This function provides three alternative pathway estimating methods which are FAIME\cite{yang12}, Kolmogorov-Smirnov test\cite{Subramanian05}, and cumulative rank test\cite{Subramanian05}. }
+    \end{description}
+
+
+%------------------------------------
+\subsection{seq2gene}
+%-------------------------------------
+  Nearly 99\% of human genome are non-coding nucleotides\cite{Lander01}. Identifying and delineating the function of all coding genes and non-coding elements remains a considerable challenge. We developed the computational function \texttt{runseq2gene} to link genomic regions of interest to genes in a many-to-many mapping, by considering the possibility that genes within a search radius in both directions from intergenic regions may fall under control of cis-regulation\cite{yang14}. Using the \texttt{seq2gene} strategy with a search radius of 100k-base, our recent study in vivo defined a transcription factor-mediated cis-regulatory element from both ChIP-seq and transcriptomic data\cite{Hoffmann14}. We also identified an intronic locus of one gene regulates the transcript of its neighbor gene instead of its host gene, suggesting the need to associate a functional genomic locus to broader candidate targets\cite{van14}. We thus suggest a larger search radius for the \texttt{seq2gene} function, such as 100k -150k bases, given that the average enhancer-promoter loop size is 120 kb in mammalian genomes\cite{Laat13} and enhancers act independently of their orientation\cite{Heintzman09}\cite{Visel09}.
+
+    \subsubsection{seq2gene flowchart}
+      \begin{figure}[H]
+        \centering
+        \includegraphics[width = 4in]{Fig1_seq2gene.png}
+        \caption{\textbf{Seq2gene flowchart}. The inputs are on the left, and the outputs are on the right.}
+        \label{figure:seq2gene}
+      \end{figure}
+      
+      Figure \ref{figure:seq2gene} gives the flowchart for the seq2gene process. Built on our previous publication\cite{yang14}, the current seq2gene uses the reference human genome annotation for the ENCODE project (GENCODE) \cite{Derrien12} version 19 for human genome and version M3 for mouse genome (Ensembl version 76 in GRCm38). ENCODE is a re-merge between the Ensembl annotation and updates from HAVANA(http://www.gencodegenes.org/releases/). Table \ref{table:statistics} lists the statistics of the gene annotations that are used by seq2pathway. 
+
+      \begin{table}[H]
+        \caption{Statistics about the seq2pathway-used GENCODE annotation.}
+         \centering
+          \begin{tabular}{|c |c |c |c |c |c |c |c |}
+          \hline
+          Species 
+          & \begin{tabular}[c]{@{}l@{}}GENCODE\\ Release\end{tabular} 
+          & \begin{tabular}[c]{@{}l@{}}Corresponding\\ Ensembl\\ assembly\end{tabular} 
+          & \begin{tabular}[c]{@{}l@{}}\# of\\ coding\\ genes\end{tabular} 
+          & \begin{tabular}[c]{@{}l@{}}\# of\\ Long\\ non-\\ coding\\ RNAs\end{tabular}
+          & \begin{tabular}[c]{@{}l@{}}\# of\\ Small\\ non-\\ coding\\ RNAs\end{tabular}
+          & \begin{tabular}[c]{@{}l@{}}\# of\\ Pseudogenes\end{tabular}
+          & \begin{tabular}[c]{@{}l@{}}\# of\\ all\\ genes\end{tabular}\\
+          \hline
+          Human & 19(Dec.2013) & GRCh74/hg19 & 20345 & 13870 & 9013 & 14206 & 57820\\ 
+          \hline
+          Mouse & M3(Apr.2014) & GRCm38/mm10 & 22026 & 5385 & 5853 & 7388 & 41128\\
+          \hline
+          \end{tabular}
+          \label{table:statistics}
+      \end{table}
+
+      The seq2gene algorithm uses a bisection strategy to search among exon and transcript annotations. Figure \ref{figure:Algorithm} is the pseudocode for the function\cite{yang14}. To perform the basic bisect algorithm with respect to exon and transcript separately, we have prepared for end users the internal ``exon.table'' and ``transcript.table'' files based on the GENCODE general feature format. Both file use ENSEMBL IDs as the key index. 
+
+      \begin{figure}[H]
+        \centering
+        \includegraphics[width = 4in]{Fig2_pseudo_scripts_bin_07102014_xy_v2.png}
+        \caption{\textbf{Pseudo-code of the seq2gene algorithm}.}
+        \label{figure:Algorithm}
+      \end{figure}
+  
+    \subsubsection{runseq2gene inputs/parameters}
+
+      \begin{description}
+        \item[\textbf{inputfile}]{An R object input file that records genomic region information (coordinates). This object could be a data frame defined as:
+        \begin{description}
+          \item[column 1]{the unique IDs of peaks/mutations/SNPs; }
+          \item[column 2]{the chromosome ID (eg. chr5 or 5); }
+          \item[column 3]{the start site of genomic regions; }
+          \item[column 4]{the end site of genomic regions (for SNP and point mutations, the difference of start and end is 1bp);}
+          \item[column 5 \ldots]{custom defined.}
+        \end{description}
+        There is one demo data in data.frame format in our package.
+            \begin{verbatim}
+    > data(Chipseq_Peak_demo)
+    > class(Chipseq_Peak_demo)
+      [1] "data.frame"
+    > head(Chipseq_Peak_demo)
+            \end{verbatim}
+        \begin{table}[H]
+          \renewcommand{\arraystretch}{0.8}
+            \begin{tabular}{l l l l l}
+            \texttt{peakID} & \texttt{chrom} & \texttt{start}  &  \texttt{end} & \texttt{signalvalue}  \\
+            peak\_59951 & chr14 & 19003706 &	19004370 & 6.611026   \\
+            peak\_59952 & chr14 & 19003800 &	19024138 & 3.450042   \\
+            peak\_59953 & chr14 & 19005068 &	19005305 & 10.997456  \\
+            peak\_59954 & chr14 & 19006372 &	19006587 & 21.055350  \\ 
+            peak\_59955 & chr14 & 19013301 & 19013534 & 8.242503   \\
+            \end{tabular}
+        \end{table}
+       Or, the input format could be a GRanges object (from R package GenomicRanges). There is a demo data in GRanges formart in our package as well.
+            \begin{verbatim}
+    > data(GRanges_demo)
+    > class(GRanges_demo)
+      [1] "GRanges"
+      attr(,"package")
+      [1] "GenomicRanges"
+    > head(GRanges_demo)
+      GRanges object with 6 ranges and 3 metadata columns:
+            \end{verbatim}       
+        \begin{table}[H]
+          \renewcommand{\arraystretch}{0.8}
+            \begin{tabular}{l r r r r r r r}
+            &  \texttt{seqnames} & \texttt{ranges} & \texttt{strand} & |  &  \texttt{name} & \texttt{score}  & \texttt{GC}\\
+            & <Rle> & <IRanges> & <Rle> & | &  <character> & <integer> & <numeric>   \\
+            a & chr1 & [1,  7] & - & | &	peak1 & 1 & 1.0000000   \\
+            b & chr2 & [2,  8] & + & | &  peak2 & 2 & 0.8888889   \\
+            c & chr2 & [3,  9] & + & | &  peak3 & 3 & 0.7777778   \\
+            d & chr2 & [4, 10] & * & | &  peak4 & 4 & 0.6666667   \\
+            e & chr1 & [5, 11] & * & | &  peak5 & 5 & 0.5555556   \\
+            f & chr1 & [6, 12] & + & | &  peak6 & 6 & 0.4444444   \\
+            \end{tabular}
+        \end{table}
+        Note that for this particular GRanges object, the \texttt{seqnames}, \texttt{ranges}, \texttt{strand}, and \texttt{name} columns are necessary.
+        And for a data frame object, the first four columns are orderly. Specifically, here are three more examples. 
+        
+        \emph{example1}:
+        \begin{table}[H]
+          \renewcommand{\arraystretch}{0.8}
+            \begin{tabular}{l l l l l l l l l}
+            \texttt{peakID} & \texttt{chrom} & \texttt{chromstart}  &	\texttt{chromend} & \texttt{name} &	\texttt{score} & \texttt{strand} & \texttt{thickstart} & \texttt{thickend} \\
+            peak2 & chr7 & 127477031 &	127478198 & Neg2 & 0 & - & 127477031 & 127478198  \\
+            peak3 & chr7 & 127478198 &	127479365 & Neg3 & 0 & - & 127478198 & 127479365  \\
+            peak4 & chr7 & 127479365 &	127480532 & Pos5 & 0 & + & 127479365 & 127480532  \\
+            peak5 &	chr7 & 127480532 &	127481699 & Neg4 & 0 & - & 127480532 & 127481699  \\ 
+            \end{tabular}
+        \end{table}
+        
+        \noindent
+        \emph{example2}:
+        \begin{table}[H] 
+        \renewcommand{\arraystretch}{0.8}
+            \begin{tabular}{l l l l}
+            \texttt{peakID} & \texttt{Chr} & \texttt{Start}  &	\texttt{End}  \\
+            MACS\_M\_1210 & chr9 &	21754771 & 21755152  \\
+            MACS\_M\_1211 & chr9 &  21753771 & 21754023	\\
+            MACS\_M\_1212 & chr9 &	31754771 & 31756766  \\
+            MACS\_M\_1213 & chr9 &	15754771 & 15755152  \\ 
+            \end{tabular}
+        \end{table}  
+    
+        \noindent    
+        \emph{example3}:
+        \begin{table}[H] 
+        \renewcommand{\arraystretch}{0.8}
+            \begin{tabular}{l l l l}
+            \texttt{SNP} & \texttt{chr} & \texttt{Physical\_position}  &  \texttt{position\_end}  \\
+            rs953509 & 9 &	81560347	&	81560348 \\
+            rs719293 & 2 &	50516523	&	50516524 \\
+            rs1394384 &	17 &	28813156	&	28813157 \\
+            rs1609772	& 1 &	186820222 &	186820223 \\ 
+            \end{tabular}
+        \end{table}  
+        }
+        \item[\textbf{search\_radius(unit bp)}]{A non-negative integer, with which the input genomic regions can be assigned not only to the matched/nearest gene, but also with all genes within a search radius. Default is 150000. \\
+        Figure \ref{figure:searchradius} illustrates the definition of search\_radius, being calculated from the middle of a genomic region to both sides.
+          \begin{figure}[H]
+            \centering
+            \includegraphics[width = 4in]{Fig3_search_radius_xy.png}
+            \caption{\textbf{The illustration of parameter search\_radius}.(Modified from genome.igi.doe.gov/help/brwser\_viewer.jsp)}
+            \label{figure:searchradius}
+          \end{figure}       
+        }
+        \item[\textbf{promoter\_radius(unit bp)}]{A non-negative integer. Default is 200.\\
+        Note that promoters are calculated from transcription start site (TSS) of genes (Figure \ref{figure:promoterradius}). Promoters can be about 100-2000 base pairs upstream of their TSSs\cite{Walton04}. User can assign the promoter\_radius to defind promoter regions in the genome.
+          \begin{figure}[H]
+            \centering
+            \includegraphics[width = 4in]{Fig4_promoter_radius.jpg}
+            \caption{\textbf{The illustration of parameter promoter\_radius}.(Edited from the UCSC genome browser)}
+            \label{figure:promoterradius}
+          \end{figure}          
+        }
+        \item[\textbf{promoter\_radius2(unit bp)}]{A non-negative integer. Default is 100. User can as well use this parameter to defined downstream regions of the TSSs as promoter.}
+        \item[\textbf{genome}]{A character specifies the genome type. Currently, ``hg38'', ``hg19''(human), and ``mm10'', ``mm9''(mouse) are supported.}
+        \item[\textbf{adjacent}]{A Boolean. Default is FALSE to search all genes within the search\_radius. Using ``TRUE'' to find the adjacent genes only and ignore parameters ``SNP'' and ``search\_radius''. }
+        \item[\textbf{SNP}]{A Boolean specifies the input object type. By default is FALSE to keep on searching for intron and neighboring genes. Otherwise, runseq2gene stops searching when the input genomic region is residing on exon of a coding gene. }
+        \item[\textbf{PromoterStop}]{A Boolean, ``FALSE'' by default to keep on searching neighboring genes using the parameter ``search\_radius''. Otherwise, runseq2gene stops searching for neighboring genes. This parameter has function only if an input genomic region map to promoter of coding gene(s). }
+        \item[\textbf{NearestTwoDirection}]{A boolean, ``TRUE'' by default to output the closest left and closest right coding genes with directions. Otherwise, output only the nearest coding gene regardless of direction. }  
+      \end{description}
+
+    \subsubsection{runseq2gene outputs}
+      The function runseq2gene outputs a matrix structured below. 
+      \begin{description}
+      \item[\texttt{Columns 1-4}]{The same as the first four columns in the input file. }
+      \item[\texttt{Columns 5} PeakLength]{An integer gives the length of the input genomic region. It is the number of base pairs between the start and end of the region. }
+      \item[\texttt{Columns 6} PeakMtoStart\_Overlap]{An integer gives the distance from the TSS of mapped gene to the middle of the genomic region. A negative signal only shows TSS of the mapped gene is at the right of the peak (Figure \ref{figure:peakMto} A-B). Otherwise, PeakMtoStart\_Overlap reports a numeric range showing the location of overlapped coordinates (Figure \ref{figure:peakMto} C).  
+          \begin{figure}[H]
+            \centering
+            \includegraphics[width = 4in]{Fig5_PeakMtoStart_V4.png}
+            \caption{\textbf{The calculation of output PeakMtoStart\_Overlap}. Scenarios could be an intergenic region of interest resides at the upstream (A) or downstream (B) of a coding gene, or a genomic region overlaps with intron or exon of a coding gene (C). }
+            \label{figure:peakMto}
+          \end{figure}   
+      }
+      \item[\texttt{Columns 7} type]{A character specifies the relationship between the genomic region and the mapped gene (Figure \ref{figure:type})
+        \begin{description}
+          \item[``Exon'']{any part of a genomic region overlaps the exon region of the mapped gene; }
+          \item[``Intron'']{any part of a genomic region overlaps an intron region but not at exon region of the mapped gene; }
+          \item[``cds'']{any part of a genomic region overlaps the CDS region; }
+          \item[``utr'']{any part of a genomic region overlaps a UTR region; }
+          \item[``promoter'']{any part of a genomic region overlaps the promoter region of the mapped gene based on an intergenic region of mapped gene covers the input genomic region;}
+          \item[``promoter\_internal'']{any part of a genomic region overlaps the promoter region of the mapped gene when an adjacent TTS region of mapped gene covers the input genomic region;}
+          \item[``Neareast'']{the mapped gene is the nearest gene if the genomic region is located in an intergenic region. ``L'' and ``R'' show the relative location of mapped genes; }
+          \item[``Neighbor'']{any mapped genes within the search radius but belongs to none of the prior types. }
+        \end{description}
+          \begin{figure}[H]
+            \centering
+            \includegraphics[width = 5in]{Fig6_type_xy.png}
+            \caption{\textbf{Six output type values in several scenarios}. In each scenario, we map the genomic region of interest in green to the following types of a coding gene: exon (1), intron (2), the nearest (3), promoter (4), Nearest\_L and Nearest\_R (5), or Promoter\_R (6). }
+            \label{figure:type}
+          \end{figure}  
+      }
+      \item[\texttt{Columns 8} BidirectionalRegion]{A Boolean indicates whether or not the input genomic region is in bidirectional region (Figure \ref{figure:bidirection}).\\
+      A ``bidirectional gene pair'' refers to two adjacent genes coded on opposite strands, with their 5' UTRs oriented toward one another. NA means the genomic region is at exon or intron region. 
+          \begin{figure}[H]
+            \centering
+            \includegraphics[width = 4in]{Fig7_BidirectionalRegion.jpg}
+            \caption{\textbf{The definition of output BidirectionalRegion in several scenarios}. 
+            (1) Two adjacent genes code on opposite strands, with their 5' ends oriented toward one another: Bidirectional region=TRUE.
+            (2) Both two adjacent genes code on reverse strands: Bidirectional region=FALSE.
+            (3) Both two adjacent genes code on forward strands: Bidirectional region=FALSE. 
+            (4) Two adjacent genes code on opposite strands, with their 3' ends oriented toward one another: Bidirectional region=FALSE. 
+            }
+            \label{figure:bidirection}
+          \end{figure}   
+      }
+      \item[\texttt{Columns 9} Chr]{An integer gives chromosome number of mapped gene.}
+      \item[\texttt{Columns 10} TSS]{An integer indicates transcription start site of mapped gene regardless of strand.}
+      \item[\texttt{Columns 11} TTS]{An integer indicates transcription termination site of mapped gene regardless of strand.}
+      \item[\texttt{Columns 12} strand]{a character indicates whether gene is in forward (+) or reverse (-) direction on chromosome.}
+      \item[\texttt{Columns 13} gene\_name]{A character gives official gene name of mapped genes.}
+      \item[\texttt{Columns 14} source]{a character gives gene source (Ensembl classification) of mapped genes.}
+      \item[\texttt{Columns 15} transID]{A character gives Ensemble transcript ID of mapped genes.}
+    \end{description}
+
+%------------------------------------
+\subsection{gene2pathway}
+%-------------------------------------
+    The gene2pathway step integrates several featured GSA (gene\-set analysis) algorithms, characterized by the improved FAIME method (Functional Analysis of Individual Microarray/RNAseq Expression)\cite{yang12}\cite{Perez13}. We initially developed FAIME for transcriptomic analysis, which compares the cumulative quantitative effects of genes inside an ontology (set of functional related genes) with those outside thus overcoming a number of difficulties in prior GSA methods\cite{yang12}. However, sensitivity of the FAIME algorithm remains a challenge as, at a significance level of false discovery rate (FDR) of 0.05, FAIME could identify hundreds of gene-sets, an impractical number for wet-lab validation. Therefore, we introduce in this package a new weighting parameter into the FAIME algorithm to better control the type-I error, especially for large gene-sets. Additionally, we recently used gene2pathway to integrate microarray and RNA-seq data for gene-set analysis (manuscript submitted). 
+    
+    Here we develop the function gene2path\_test as an improved tool for functionally analyzing versatile next generation sequencing data by taking account of quantitative sequence measurements. This function implements the improved FAIME algorithm. This function can run the classical Fisher's exact test or novel gene2pathway tests.
+
+    \subsubsection{gene2pathway flowchart}
+    Figure \ref{figure:gene2pathway} gives the flowchart for the gene2pathway process. Hereafter we use ``pathway'' to refer functional gene-sets for simplification. 
+        \begin{figure}[H]
+          \centering
+          \includegraphics[width = 5in]{Fig8_gene2pathway_flowchart_xy.png}
+          \caption{\textbf{gene2pathway flowchart}.}
+          \label{figure:gene2pathway}
+        \end{figure}    
+
+    \subsubsection{gene2pathway\_test inputs/parameters}
+    
+      \begin{description}
+        \item[\textbf{dat}]{A data frame of gene expression or a matrix of sequencing derived gene-level measurements. The rows of dat correspond to genes, and the columns correspond to sample profile (eg. Chip-seq peak scores, somatic mutation p-values, RNS-seq or microarray gene expression values).\\
+          Note that official gene symbols must label the \textbf{dat} rows. The values contained in dat should be either finite or NA. For example:
+          \begin{table}[H] 
+          \renewcommand{\arraystretch}{0.8}
+              \begin{tabular}{l l }
+              \texttt{ } & \texttt{Peak.Score}  \\
+              \texttt{ARHGEF10} & \texttt{65.21356}  \\
+              \texttt{ARHGAP31} & \texttt{50.42416}   \\
+              \texttt{B4GALT4} & \texttt{50.42416}   \\
+              \end{tabular}
+          \end{table}
+        }
+      \item[\textbf{DataBase}]{A character string assigns an R GSA.genesets object to define gene-set. User can call GSA.read.gmt function in R GSA package to load customized gene-sets with a .gmt format. If not specified, GO defined gene sets (BP, MF, CC) will be used. For example,
+      \begin{verbatim}
+> data(MsigDB_C5,package="seq2pathway.data")
+> class(MsigDB_C5)     
+[1] "GSA.genesets"
+      \end{verbatim}        
+        }
+        \item[\textbf{FisherTest}]{A Boolean value. By default is TRUE to execute the function of the Fisher's exact test. Otherwise, only executes the function of gene2pathway test.}  
+        \item[\textbf{EmpiricalTest}]{A Boolean value. By default is FALSE for multiple-sample dat. When true, gene2pathway\_test calculates empirical p-values for gene-sets. } 
+        \item[\textbf{method}]{A character string determines which method to calculate the pathway scores. Currently, ``FAIME'' (default), ``KS-rank'', and ``cumulative-rank'' are supported.} 
+        \item[\textbf{genome}]{A character specifies the genome type. Currently, choice of ``hg38'', ``hg19'', ``mm10'', and ``mm9'' is supported.} 
+        \item[\textbf{alpha}]{A positive integer, 5 by default. This is a FAIME-specific parameter. A higher value puts more weights on the most highly-expressed ranks than the lower expressed ranks\cite{yang12} \cite{Lottaz06}.} 
+        \item[\textbf{logCheck}]{A Boolean value. By default is FALSE. When true, take the log-transformed values of all genes if the maximum value of sample profile is larger than 20.} 
+        \item[\textbf{na.rm}]{A Boolean value indicates whether to keep missing values or not when method=``FAIME''. By default is FALSE.} 
+        \item[\textbf{B}]{A positive integer assigns the total number of random sampling trials to calculate the empirical p values. By default is 100.} 
+        \item[\textbf{min\_Intersect\_Count}]{A number decides the cutoff of the minimum number of intersected genes when reporting Fisher's exact tested results.}           
+      \end{description}
+
+    \subsubsection{gene2pathway\_test outputs}
+      A list or data frame. If the parameter FisherTest is true, the result is a list including both reports for Fisher's exact test and the gene2pathway test. Otherwise, only reports the gen2pathway test results. For example, below Table ~\ref{table:gene2path} is the head of result of gene2pathway test.
+ 
+      \begin{table}[H]
+        \centering
+         \tiny
+        \resizebox{\textwidth}{!}{%
+             \begin{tabular*}{\textwidth}{p{1.5cm}p{2cm}rrrrrrp{5cm}}
+    \hline
+     & Des & TCGA & TCGA & TCGA & TCGA  & TCGA  & Intersect & Intersect \\ 
+     &  & 28412 & 28402 & 28432 & 28422 & 28452 & Count & gene \\
+     &  & pathscore & pathscore & pathscore & pathscore & pathscore \\
+     &  & Normalized & Normalized & Normalized & Normalized & Normalized  \\
+    \hline
+    NUCLEOPLASM & http://www.broadinstitute. org/gsea/msigdb/cards /NUCLEOPLASM & 0.3800166  & 0.7017463 & 0.60702357 & 0.72972712 & 0.8866237 & 37 
+    & ACTB ACTL6A ACTL6B APPL1 APPL2 APTX ARID1A ARID1B ARID4A ARNTL ASF1A ASH2L ATF6 ATXN1 ATXN3 BNIP3 C19ORF2 C1ORF124 CBX1 CCNO CD3EAP CDK8 CDK9 CDKN2A CDKN2AIP CHAF1A CHAF1B CHEK2 CIB1 CIR1 CLOCK COIL CPSF1 CPSF3 CPSF3L CPSF6 DKC1 \\ 
+    ORGANELLE\_PART & http://www.broadinstitute. org/gsea/msigdb/cards /ORGANELLE\_PART & 0.7516177 & 0.8067336 & 0.82731623 & 0.86229571 & 0.8968370 & 272
+    & A1CF AAAS AADAC ABCA2 ABCB6 ABCB7 ABCB8 ABCC4 ABCD3 ABCF2 ABL1 ACADM ACD ACN9 ACR ACTA1 ACTB ACTC1 ACTL6A ACTL6B ACTN2 ACTN3 ACTR1A ACTR1B ACTR2 ACTR3 ADAM10 ADAP2 AFTPH AGFG1 AIFM2 AIFM3 AKAP9 ALAS2 ALDH4A1 ALG3 ALMS1 ALS2 AMFR AMOT ANAPC11 ANAPC4 ANAPC5 ANG ANKFY1 ANLN AP1G2 AP1S1 AP2S1 AP3B2 AP4B1 AP4M1 APC API5 APOBEC3F APOBEC3G APPBP2 APPL1 APPL2 APTX ARCN1 ARFGEF2 ARFIP1 ARHGEF2 ARID1A ARID1B ARID4A ARL8A ARL8B ARNTL ARPC1B ARPC2 ARPC3 ARPC4 ARPC5 ASF1A ASH2L ASNA1 ASPH ATF6 ATG4A ATG4B ATG4C ATG4D ATP2C1 ATP5A1 ATP5B ATP5C1 ATP5D ATP5E ATP5F1 ATP5G1 ATP5G2 ATP5G3 ATP5J ATP5O ATP6V1B1 ATP7A ATP7B ATRX ATXN1 ATXN2 ATXN3 AURKA AURKC AZI1 B3GALT6 B4GALT1 BARD1 BAX BBS4 BCAS2 BCKDHA BCKDHB BCKDK BCL2 BCL6 BCS1L BET1 BFSP2 BIRC5 BMF BNIP1 BNIP2 BNIP3 BNIP3L BRCA1 BRCA2 BRCC3 BRE BSCL2 BUB1 BUB1B BUB3 C15ORF29 C19ORF2 C1ORF124 CABP1 CACNA1C CALR CAPG CAPZA1 CAPZA2 CAPZB CASP7 CASQ1 CAV1 CBX1 CBX5 CBY1 CCNH CCNO CCNT1 CD2AP CD3EAP CD63 CDC16 CDC20 CDC23 CDC26 CDC27 CDC40 CDCA5 CDK1 CDK5RAP2 CDK8 CDK9 CDKN2A CDKN2AIP CDT1 CENPA CENPC1 CENPE CENPF CEP250 CEP290 CEP57 CEP63 CETN1 CETN3 CHAF1A CHAF1B CHEK1 CHEK2 CHMP1A CHST2 CHST4 CIB1 CIR1 CIRH1A CKAP5 CLASP1 CLASP2 CLCN3 CLIP1 CLIP2 CLN3 CLN5 CLN6 CLOCK CNTROB COG1 COG2 COG3 COG4 COG5 COG6 COG7 COG8 COIL COPA COPB1 COPB2 COPE COPG COPG2 COPS2 COPZ1 CORO1A COX15 COX18 COX6B2 CPSF1 CPSF3 CPSF3L CPSF6 CROCC CS CSPG5 CTAG2 CTDNEP1 CTNS CUZD1 CWC22 CYCS CYLC1 DAD1 DBT DCTN1 DCTN2 DCTN3 DCTN4 DCX DDOST DDX11 DDX19B DDX21 DDX23 DDX24 DDX47 DDX54 DDX56 DEDD DEDD2 DERL1 DERL2 DERL3 DHCR7 DHRS9 DHX15 DHX8 DKC1 DLGAP5 DMBT1 DMC1 DNAH9 DNAI2 DNAJA3 DNAJB9 DNALI1 DNM1L DNMT3A \\
+    CELL\_PROJECTION \_PART & http://www.broadinstitute. org/gsea/msigdb/cards /CELL\_PROJECTION\_PART & -1.0863671 & -1.1430708 & -0.89560385 & -0.76891405 & -0.9987234 & 9
+    & ACTN2 ATP6V0A4 B4GALT1 CABP4 CDK5R1 CROCC DNAH9 DNAI2 DNALI1 \\
+     CYTOPLASMIC \_VESICLE\_MEMBRANE  & http://www.broadinstitute. org/gsea/msigdb/cards /CYTOPLASMIC \_VESICLE\_MEMBRANE  & 1.5531183  & 1.5750084  &  1.51152263 & 1.79550412  & 0.2484891 & 15
+    &  ABCC4 AFTPH AP1G2 AP1S1 AP2S1 ARCN1 COPA COPB1 COPB2 COPE COPG COPG2 COPZ1 CSPG5 CUZD1 DMBT1 \\
+     GOLGI\_MEMBRANE  & http://www.broadinstitute. org/gsea/msigdb/cards /GOLGI\_MEMBRANE  & 0.1813367  & 0.1063748  & 0.03454226  & 0.29232424 & 0.2617705 & 8
+    &  AFTPH AP1G2 AP1S1 ARFGEF2 ARFIP1 ATP2C1 ATP7A BET1 BNIP3 CAV1 CLN3 COG2 COPB1 COX18 CSPG5 \\    
+    \hline
+    \end{tabular*}}
+          \label{table:gene2path}
+      \caption{result of gene2pathway}
+      \end{table} 
+
+%section5: examples
+%------------------------------------
+\section{Examples} 
+%------------------------------------
+The most critical issue in functionally interpreting genomic loci is to bridge non-coding regions with gene function. \texttt{Seq2pathway} offers the capability to discover pathway enrichment caused by long-distance cis-regulation of functional non-coding loci. Here we demonstrate the application on ChIP-seq and RNA-seq data analysis respectively. For ChIP-seq data, we demonstrate a use of \texttt{runseq2gene} and \texttt{gene2pathway\_test} in series. To facilitate the comparison with conventional Fisher's exact test, we demonstrated the use of two additional functions below. 
+   \begin{description}
+      \item[``FisherTest\_GO\_BP\_MF\_CC'']{The GO enrichment analysis for coding genes using Fisher's exact test.}
+      \item[``FisherTest\_MsigDB'']{The MSigDB\cite{Liberzon11} defined functional gene-set enrichment analysis for coding genes using the Fisher's exact test.}
+    \end{description}
+
+
+%------------------------------------
+  \subsection{ChIP-seq data analysis}
+%------------------------------------
+    \subsubsection{Map ChIP-seq enriched peaks to genes using \texttt{runseq2gene}}
+    \texttt{runseq2gene()} is one of the key functions in the seq2pathway package. The \texttt{runseq2gene} links sequence-level measurements of genomic regions (including ChIP-seq peaks, SNPs or point mutation coordinates) to gene-level scores. The function has the option to assign non-exon regions to a broader range of neighboring genes than the nearest one, thus facilitating the study of functional non-coding elements. Currently, Seq2pathway only works in Linux or windows with python2.7 environment, as it has wrapped python scripts to annotate loci to genes.  \\
+    To execute runseq2gene, we need to assign input file. An example of inputfile, Chipseq\_Peak\_demo, is included in the package. 
+    \begin{verbatim}
+> data(Chipseq_Peak_demo)
+> head(Chipseq_Peak_demo)    
+    \end{verbatim}
+    
+        \begin{table}[H] 
+         \small
+         \renewcommand{\arraystretch}{0.8}
+            \begin{tabular}{rrrrr}
+            \texttt{peakID} & \texttt{Chrom} & \texttt{Start}  &  \texttt{End}  &  \texttt{signalvalue}\\
+            Peak\_59951 & chr14 &	 19003706 & 19004370  &  6.611026  \\
+            Peak\_59952 & chr14 &  19003800 & 19024138  &  3.450042	\\
+            Peak\_59953 & chr14 &	 19005068 & 19005305  &  10.997456  \\
+            Peak\_59954 & chr14 &	 19006372 & 19006587  &  21.055350  \\ 
+            Peak\_59955 & chr14 &  19013301 & 19013534  &  8.242503  \\ 
+            Peak\_59956 & chr14 &  19013717 & 19013931  &  17.948627  \\ 
+            \end{tabular}
+        \end{table} 
+        
+    Then user can run demo data below:
+    \begin{verbatim}
+> Chipseq_anno <- runseq2gene(
+                  inputfile=Chipseq_Peak_demo, 
+                  genome="hg19", adjacent=F, SNP=F, search_radius=150000, 
+                  PromoterStop=F,NearestTwoDirection=F)
+    \end{verbatim}
+    \begin{verbatim}
+> class(Chipseq_anno)
+[1] "list"
+> head(Chipseq_anno[[1]])
+    \end{verbatim}
+      \begin{table}[H]
+        %\centering
+         \tiny
+         \resizebox{\textwidth}{!}{%
+             \begin{tabular*}{\textwidth}{lrrrrrrrrrrrrrl}
+    \hline
+peakID & chrom & start  & end & Peak & peakMtoStart  & type & Bidirenctional & Chr & TSS & TTS & strand & gene & source  & transID \\ 
+  &   &   &   & Length  & \_Overlap  &   &  Region &   &   &   &   & \_name  \\  
+    \hline
+Peak\_59951 & chr14 & 19003706 & 19004370 & 664  & 373484 & Nearest & N & chr14 & 19377522 & 19378606 & + & OR11H12 & protein\_coding & ENSG00000257115.1 \\
+Peak\_59951 & chr14 & 19003706 & 19004370 & 664 & -106165 & Neighbor & N & chr14 & 19110203 & 19118336 & + & RP11-754I20.1 & pseudogene & ENSG00000215398.7 \\
+Peak\_59951 & chr14 & 19003706 & 19004370 & 664 & -115477 & Neighbor & N & chr14 & 19119515 & 19119621 & + & RNU6-458P & snRNA & ENSG00000206906.1 \\
+Peak\_59952 & chr14 & 19003800 & 19024138 & 20338 & 363553 & Nearest & N & chr14 & 19377522 & 19378606 & + & OR11H12 & protein\_coding & ENSG00000257115.1 \\
+Peak\_59952 & chr14 & 19003800 & 19024138 & 20338 & -96234 & Neighbor & N & chr14 & 19110203 & 19118336 & + & RP11-754I20.1 & pseudogene & ENSG00000215398.7 \\
+Peak\_59952 & chr14 & 19003800 & 19024138 & 20338 & -105546 & Neighbor & N & chr14 & 19119515 & 19119621 & + & RNU6-458P & snRNA & ENSG00000206906.1 \\    
+       \hline    
+    
+    \end{tabular*}}
+
+      \end{table}   
+    
+    \subsubsection{Discover enriched GO terms using \texttt{gene2pathway\_test} with gene scores}
+    After mapping peaks to genes, we will practice \texttt{gene2pathway\_test} function. This function summarizes gene scores to pathway-scores for each sample. The function \texttt{gene2pathway\_test} includes \texttt{rungene2pathway} function, which summarizes gene scores to pathway-scores for each sample, and is another main function in our package. The \texttt{rungene2pathway} function provides different methods (``FAIME'', ``KS-rank'', and ``cumulative-rank'') to convert gene-level measurements to pathway-level scores. The function \texttt{gene2pathway\_test} also includes \texttt{FisherTest} function to perform conventional Fisher's exact test (FET). The \texttt{FisherTest} function uses the corrected, common gene background for selected pathways. Hereafter we use ``pathway'' to refer functional gene-sets including GO for simplification. Following are R exampling codes.\\
+    \newline
+    \#Example1: \\
+    \underline{Running FAIME and FET against MSigDB defined gene-sets with empirical p-values}
+      \begin{verbatim}
+## give the previously defined gene-sets  
+
+> data(MsigDB_C5,package="seq2pathway.data")
+> class(MsigDB_C5)    
+[1] "GSA.genesets"
+## load the gene-level measurements, here is an example of ChIP-seq scores
+> data(dat_chip)
+> head(dat_chip)
+      \end{verbatim}
+
+          \begin{table}[H] 
+          \renewcommand{\arraystretch}{0.8}
+              \begin{tabular}{l r }
+              \texttt{ } & \texttt{peakscore}  \\
+              \texttt{ABCD4} & \texttt{8.433123}  \\
+              \texttt{ABHD12B} & \texttt{9.526305}   \\
+              \texttt{ABHD4} & \texttt{9.988747}   \\
+              \texttt{AC004817.1} & \texttt{10.086676}   \\
+              \texttt{AC005477.1} & \texttt{10.086676}   \\
+              \texttt{AC007375.1} & \texttt{10.186544}   \\
+              \end{tabular}
+          \end{table}
+
+
+
+
+    \begin{verbatim}
+> result_FAIME<-gene2pathway_test(dat= dat_chip, DataBase= MsigDB_C5, 
+                FisherTest=T, EmpiricalTest=T, method="FAIME", 
+                alpha=5, logCheck=F,  na.rm=F)
+    \end{verbatim}
+    The \texttt{output} is a list, which include two data frame. One data set is the result of Fisher's exact test, with the geneset from MSigDB\cite{Liberzon11}, the other is the result of \texttt{rungene2pathway} function with method ``FAIME''. We calculated empirical p-values for a single sample. \\
+    \newline
+    \#Example2: \\
+    \underline{Running FAIME and FET against GO defined gene-sets with empirical p-values}
+    \begin{verbatim}
+> result_FAIME<-gene2pathway_test(dat= dat_chip, 
+                FisherTest=T, EmpiricalTest=T, method="FAIME", 
+                alpha=5, logCheck=F, na.rm=F)
+    \end{verbatim}
+    In our package, there is an R resultant object \texttt{dat\_gene2path\_chip} as demo of \texttt{result\_FAIME}. 
+
+
+    \begin{verbatim}
+> data(dat_gene2path_chip,package="seq2pathway.data")
+> names(dat_gene2path_chip)
+[1] "gene2pathway_result.2"   "gene2pathway_result.FET"
+> class(dat_gene2path_chip$gene2pathway_result.2)
+[1] "list"
+> names(dat_gene2path_chip$gene2pathway_result.2)
+[1] "GO_BP" "GO_CC" "GO_MF"
+> head(dat_gene2path_chip$gene2pathway_result.2$GO_BP)
+    \end{verbatim}
+      
+      \begin{table}[H]
+        \centering
+         \tiny
+        \resizebox{\textwidth}{!}{%
+             \begin{tabular*}{\textwidth}{l p{6cm}rrrp{5cm}}
+    \hline
+     & Des & peakscore & peakscore & Intersect & Intersect  \\ 
+     &     & pathscore & pathscore & \_Count   & \_gene \\
+     &     & \_Normalized & \_Pvalue  \\
+    \hline
+    GO:0000082 & 
+    The mitotic cell cycle transition by which a cell in G1 commits to S phase. The process begins with the build up of G1 cyclin-dependent kinase (G1 CDK), resulting in the activation of transcription of G1 cyclins. The process ends with the positive feedback of the G1 cyclins on the G1 CDK which commits the cell to S phase, in which DNA replication is initiated.
+    & 0.32017745 & 0.12 & 11 &
+    CDKN3 GPR132 MNAT1 POLE2 PSMA3 PSMA6 PSMB5 PSMC1 PSMC6 PSME1 PSME2
+    \\
+    GO:0000086 &
+    The mitotic cell cycle transition by which a cell in G2 commits to M phase. The process begins when the kinase activity of M cyclin/CDK complex reaches a threshold high enough for the cell cycle to proceed. This is accomplished by activating a positive feedback loop that results in the accumulation of unphosphorylated and active M cyclin/CDK complex.
+    & -0.33586010 & 0.49 & 5 &
+    AJUBA DYNC1H1 HSP90AA1 LIN52 MNAT1 \\
+    GO:0000122 & 
+    Any process that stops, prevents, or reduces the frequency, rate or extent of transcription from an RNA polymerase II promoter.
+    & -0.11535853 & 0.16 & 20 &
+    AJUBA BMP4 DACT1 DICER1 ESR2 FOXA1 GSC JDP2 NKX2-1 PPM1A PRMT5 PSEN1 RCOR1 SALL2 SIX1 SNW1 STRN3 YY1 ZBTB1 ZBTB42 \\
+    GO:0000209 & 
+    Addition of multiple ubiquitin groups to a protein, forming a ubiquitin chain.
+    & 0.17070465 & 0.11 & 11 &
+    ASB2 G2E3 PSMA3 PSMA6 PSMB11 PSMB5 PSMC1 PSMC6 PSME1 PSME2 RNF31 \\
+    GO:0000278 & 
+    Progression through the phases of the mitotic cell cycle, the most common eukaryotic cell cycle, which canonically comprises four successive phases called G1, S, G2, and M and includes replication of the genome and the subsequent segregation of chromosomes into daughter cells. In some variant cell cycles nuclear replication or nuclear division may not be followed by cell division, or G1 and G2 phases may be absent.
+    & 0.06368249 & 0.04 & 16 &
+    AJUBA DYNC1H1 HSP90AA1 LIN52 MNAT1 NEK9 POLE2 PSMA3 PSMA6 PSMB11 PSMB5 PSMC1 PSMC6 PSME1 PSME2 VRK1    \\
+    GO:0000398 & 
+    The joining together of exons from one or more primary transcripts of messenger RNA (mRNA) and the excision of intron sequences, via a spliceosomal mechanism, so that mRNA consisting only of the joined exons is produced.
+    &  -0.55767621 & 0.59 & 8 & 
+    CPSF2 HNRNPC NOVA1 PABPN1 PAPOLA PNN SNW1 SRSF5 \\
+    
+    \hline
+    \end{tabular*}}
+          %\label{table:GO BP of gene2pathway result.2}
+      \caption{GO BP of gene2pathway result.2}
+      \end{table} 
+      
+    \begin{verbatim}
+> class(dat_gene2path_chip$gene2pathway_result.FET)
+[1] "list"
+> names(dat_gene2path_chip$gene2pathway_result.FET)
+[1] "GO_BP" "GO_CC" "GO_MF"
+> head(dat_gene2path_chip$gene2pathway_result.FET$GO_BP)
+    \end{verbatim}
+
+      \begin{table}[H]
+        \centering
+         \tiny
+        \resizebox{\textwidth}{!}{%
+             \begin{tabular*}{\textwidth}{l p{4cm}rrrrrrp{4cm}}
+    \hline
+     GOID & Description & Fisher & Fisher & FDR & Intersect &  GO            & GO &  Intersect \\ 
+          &             & \_Pvalue & \_odds &   & \_Count   & \_gene         & \_gene & \_gene \\ 
+          &             &          &        &   &           & \_inBackground & \_raw  \\
+          &             &          &        &   &           &                & \_Count  \\
+    \hline
+    GO:0030162 & 
+    Any process that modulates the frequency, rate or extent of the hydrolysis of a peptide bond or bonds within a protein.
+    & 1.173994e-07 & 11.802616 & 1.361833e-05 & 10 & 38 & 39 &
+    SERPINA3 SERPINA6 SERPINA5 SERPINA1 SERPINA4 TRAF3 SERPINA10 SERPINA12 SERPINA11 SERPINA9
+    \\
+    GO:0090501 & 
+    The RNA metabolic process in which the phosphodiester bonds between ribonucleotides are cleaved by hydrolysis.
+    & 1.361482e-05 & 15.122011 & 7.896593e-04 & 6 & 19 & 19 &
+    ANG RNASE2 RNASE3 RNASE6 DICER1 RNASE7
+    \\
+    GO:0006521 & 
+    Any process that modulates the frequency, rate or extent of the chemical reactions and pathways involving amino acids.
+    & 1.252248e-04 & 6.113560 & 3.386585e-03 & 8 & 51 & 51 &
+    PSMA3 PSMA6 PSMB5 PSMC1 PSMC6 PSME1 PSME2 PSMB11
+    \\
+    GO:0006977 & 
+    A cascade of processes induced by the cell cycle regulator phosphoprotein p53, or an equivalent protein, in response to the detection of DNA damage and resulting in the stopping or reduction in rate of the cell cycle.
+    & 1.459735e-04 & 5.195514 & 3.386585e-03 & 9 & 66 & 66 & 
+    PPP2R5C PSMA3 PSMA6 PSMB5 PSMC1 PSMC6 PSME1 PSME2 PSMB11
+    \\
+    GO:0034641 & 
+    The chemical reactions and pathways involving various organic and inorganic nitrogenous compounds, as carried out by individual cells.
+    & 1.439655e-04 & 3.141606 & 3.386585e-03 & 16 & 185 & 185 &
+    ARG2 CKB DIO2 DIO3 DLST GSTZ1 ALDH6A1 PSMA3 PSMA6 PSMB5 PSMC1 PSMC6 PSME1 PSME2 SLC25A21 PSMB11
+    \\
+    GO:0010951 & 
+    Any process that decreases the frequency, rate or extent of endopeptidase activity, the endohydrolysis of peptide bonds within proteins.
+    & 2.437280e-04 & 4.333480 & 4.712075e-03 & 10 & 86 & 87 &
+    SERPINA3 AKT1 SERPINA6 SERPINA5 SERPINA1 SERPINA4 SERPINA10 SERPINA12 SERPINA11 SERPINA9
+    \\
+    \hline
+    \end{tabular*}}
+          %\label{table:GO BP of gene2pathway result.FET}
+      \caption{GO BP of gene2pathway result.FET}
+      \end{table} 
+
+    \noindent
+    \#Example3: \\
+    \underline{Running FAIME and FET against GO defined gene-sets without empirical p-values}
+    \begin{verbatim}
+> result_FAIME<-gene2pathway_test(dat= dat_chip, FisherTest=T, EmpiricalTest=F,
+                method="FAIME", alpha=5, logCheck=F, na.rm=F)
+    \end{verbatim}
+    \#Example4: \\
+    \underline{Running FAIME only against GO defined gene-sets with empirical p-values}
+    \begin{verbatim}
+> result_FAIME<-gene2pathway_test(dat= dat_chip, FisherTest=F,EmpiricalTest=T,
+                method="FAIME", alpha=5, logCheck=F, na.rm=F)
+    \end{verbatim} 
+
+    \subsubsection{Discover enriched GO terms using Fisher's Exact test without gene scores}
+     %\paragraph{The Fisher's exact test (FET)}
+There are two functions to run FET in the package \texttt{seq2pathway}. Both perform conditional FET with modified gene background that is the common genes between genome and the gene-set database, e.g., MSigDB (Figure \ref{figure:Fisher})\cite{yang14}. The \texttt{FisherTest\_GO\_BP\_MF\_CC} function uses GO (GO.db\_2.14.0) defined gene-sets, and the \texttt{FisherTest\_MsigDB} function requires MsidDB defined gene-sets as input. 
+          \begin{figure}[H]
+            \centering
+            \includegraphics[width = 4in]{Fig9_Fisher_v2.png}
+            \caption{\textbf{Conditional Fisher's exact test with corrected common background}. The common background between genome and the gene-set database, e.g., MSigDB, is illustrated as a grey region, which contains around 22,000 human coding genes or 15,546 mouse coding genes. }
+            \label{figure:Fisher}
+          \end{figure}  
+    \noindent     
+    \underline{FisherTest\_MsigDB function}:
+            \begin{itemize}
+              \item Inputs/parameters:
+                \begin{description}
+                  \item[gsmap]{An R GSA.genesets object defined by the package ``GSA'' for functional gene-set (or termed as pathway for simplification). For example,
+                  
+                  \begin{verbatim}
+> data(MsigDB_C5,package="seq2pathway.data")
+> class(MsigDB_C5)  
+[1] "GSA.genesets"
+                  \end{verbatim}                
+                  }
+                  \item[gs]{A characteristic vector of gene symbols of interest. }
+                  \item[genome]{A character specifies the genome type. Currently, choice of ``hg38'', ``hg19'', ``mm10'', and ``mm9'' is supported.}
+                  \item[min\_Intersect\_Count]{A number decides the cutoff of the minimum number of intersected genes when reporting Fisher's exact tested results.}
+                \end{description}
+              \item Output: \\
+              A data frame of Fisher's exact tested result with the following columns:
+              \begin{description}
+                \item[GeneSet]{MsigDB gene-set names (ID)}
+                \item[Description]{MSigDB definition and description for the gene-sets}
+                \item[Fisher\_Pvalue]{the raw P values}
+                \item[Fisher\_odds]{estimate of the odds ratios}
+                \item[FDR]{the multi-test adjusted P values using the Benjamini and Hochberg method\cite{Benjamini95}}
+                \item[Intersect\_Count]{the sizes of the overlap between gene-set genes and the input gene list}
+                \item[MsigDB\_gene\_inBackground]{the counts of genes among each MSigDB gene-set that are also within the given genome background}
+                \item[MsigDB\_gene\_raw\_Count]{the original counts of genes in each MSigDB geneset}
+                \item[Intersect\_gene]{the intersecting genes' symbols}
+              \end{description}
+              \item An example:
+              
+                    \begin{verbatim}
+> data(dat_chip)
+> head(dat_chip)
+                    \end{verbatim}
+          \begin{table}[ht] 
+          \renewcommand{\arraystretch}{0.8}
+              \begin{tabular}{l r }
+              \texttt{ } & \texttt{peakscore}  \\
+              \texttt{ABCD4} & \texttt{8.433123}  \\
+              \texttt{ABHD12B} & \texttt{9.526305}   \\
+              \texttt{ABHD4} & \texttt{9.988747}   \\
+              \texttt{AC004817.1} & \texttt{10.086676}   \\
+              \texttt{AC005477.1} & \texttt{10.086676}   \\
+              \texttt{AC007375.1} & \texttt{10.186544}   \\
+              \end{tabular}
+          \end{table}
+                    \begin{verbatim}
+> FS_test<-FisherTest_MsigDB(gsmap=MsigDB_C5, gs=as.vector(rownames(dat_chip)))
+> head(FS_test)
+                    \end{verbatim}   
+
+      \begin{table}[H]
+        \centering
+         \tiny
+        \resizebox{\textwidth}{!}{%
+             \begin{tabular*}{\textwidth}{p{2cm} p{3cm}rrrrrrp{3cm}}
+    \hline
+     GeneSet & Description & Fisher & Fisher & FDR & Intersect &  MsigDB     & MsigDB &  Intersect \\ 
+          &             & \_Pvalue & \_odds &   & \_Count   & \_gene         & \_gene & \_gene \\ 
+          &             &          &        &   &           & \_inBackground & \_raw  \\
+          &             &          &        &   &           &                & \_Count  \\
+    \hline
+    RIBONUCLEASE\_ACTIVITY & 
+    http://www.broadinstitute. org/gsea/msigdb/ cards/RIBONUCLEASE\_ACTIVITY
+    & 1.881465e-08 & 19.268873 & 3.988705e-06 & 9 & 25 & 25 &
+     DICER1 ANG RNASE7 RNASE8 APEX1 RNASE1 RNASE2 RNASE3 RNASE6
+    \\
+    NUCLEASE\_ACTIVITY & 
+    http://www.broadinstitute. org/gsea/msigdb/ cards/NUCLEASE\_ACTIVITY
+    & 2.713796e-05 & 6.682127 & 2.876623e-03 & 9 & 55 & 55 &
+    DICER1 ANG RNASE7 RNASE8 APEX1 RNASE1 RNASE2 RNASE3 RNASE6
+    \\
+    ENDONUCLEASE\_ACTIVITY & 
+    http://www.broadinstitute. org/gsea/msigdb/ cards/ENDONUCLEASE\_ACTIVITY
+    & 6.848601e-04 & 8.419752 & 4.839678e-02 & 5 & 25 & 25 &
+    DICER1 ANG RNASE8 APEX1 RNASE1
+    \\
+    TRANSCRIPTION \_COACTIVATOR\_ACTIVITY & 
+    http://www.broadinstitute. org/gsea/msigdb/ cards/TRANSCRIPTION\_COACTIVATOR\_ ACTIVITY
+    & 3.226841e-03 & 3.010833 & 1.710226e-01 & 10 & 123 & 123 & 
+    YY1 RIPK3 SNW1 MAX GTF2A1 ESR2 MED6 NFATC4 TRIP11 APEX1
+    \\
+    SEXUAL\_REPRODUCTION & 
+    http://www.broadinstitute. org/gsea/msigdb/ cards/SEXUAL\_REPRODUCTION
+    & 2.006048e-02 & 2.358725 & 4.252823e-01 & 9 & 138 & 139 &
+    JAG2 REC8 PNMA1 BCL2L2 RPL10L ADAM20 ADAM21 SERPINA5 HSPA2
+    \\
+    ACTIN\_FILAMENT \_BASED\_PROCESS & 
+    http://www.broadinstitute. org/gsea/msigdb/ cards/ACTIN\_FILAMENT\_BASED\_PROCESS
+    & 1.866597e-02 & 2.548107 & 4.252823e-01 & 8 & 114 & 115 &
+    MYH7 MYH6 ARF6 EVL CDC42BPB RHOJ ANG PLEK2
+    \\
+    \hline
+    \end{tabular*}}
+          %\label{table:GO BP of gene2pathway result.2}
+      %\caption{Msigdb of FET}
+      \end{table} 
+      
+            
+            \end{itemize}
+
+    \noindent     
+    \underline{FisherTest\_GO\_BP\_MF\_CC function}:
+            \begin{itemize}
+              \item Inputs/parameters:
+                \begin{description}
+                  \item[gs]{A characteristic vector of gene symbols, the input genelist. \\
+                  Note that the \texttt{seq2pathway} package has prepared an internal R object \\
+                  \texttt{GO\_MF\_CC\_BP\_term\_gene\_lists\_Fromorg.Hs.egGO2EG.rData}, which is formatted from \texttt{biomaRt\_2.20.0} and \texttt{org.Hs.eg.db\_2.14.0} gene symbols and \texttt{GO.db\_2.14.0} gene ontologies. 
+                  }
+                  \item[genome]{A character specifies the genome type. Currently, choice of ``hg38'', ``hg19'', ``mm10'', and ``mm9'' is supported.}
+                  \item[min\_Intersect\_Count]{A number decides the cutoff of the minimum number of intersected genes when reporting Fisher's exact test results.}
+                \end{description}
+              \item Outputs: \\
+              A list of 3 data frames, each is a result of Fisher's exact test, using GO CC, BP, MF respectively. Each data frame reports FET results with the following columns.
+                \begin{description}
+                  \item[GOID]{GO term ID}
+                  \item[Description]{GO definition and description for the gene-sets based on the R object \texttt{GO.db\_2.14.0}}
+                  \item[Fisher\_Pvalue]{the raw P values}
+                  \item[Fisher\_odds]{estimate of the odds ratios}
+                  \item[FDR]{the multi-test adjusted P values using the Benjamini and Hochberg method\cite{Benjamini95}}
+                  \item[Intersect\_Count]{the sizes of the overlap between GO gene members and the input gene list}
+                  \item[GO\_gene\_inBackground]{the counts of genes among each GO term that are also within a given genome background}
+                  \item[GO\_gene\_raw\_Count]{the original counts of genes in each GO term}
+                  \item[Intersect\_gene]{the intersecting genes' symbols}
+                \end{description}
+              \item An example:
+
+                    \begin{verbatim}
+> data(dat_chip)
+> head(dat_chip)
+                    \end{verbatim}
+          \begin{table}[ht] 
+          \renewcommand{\arraystretch}{0.8}
+              \begin{tabular}{l r }
+              \texttt{ } & \texttt{peakscore}  \\
+              \texttt{ABCD4} & \texttt{8.433123}  \\
+              \texttt{ABHD12B} & \texttt{9.526305}   \\
+              \texttt{ABHD4} & \texttt{9.988747}   \\
+              \texttt{AC004817.1} & \texttt{10.086676}   \\
+              \texttt{AC005477.1} & \texttt{10.086676}   \\
+              \texttt{AC007375.1} & \texttt{10.186544}   \\
+              \end{tabular}
+          \end{table}
+
+\begin{verbatim}
+> FS_test<- FisherTest_GO_BP_MF_CC(gs=as.vector(rownames(dat_chip)))
+[1] "Fisher's exact test done"
+> head(FS_test$GO_CC)
+\end{verbatim}
+
+      \begin{table}[H]
+        \centering
+         \tiny
+        \resizebox{\textwidth}{!}{%
+             \begin{tabular*}{\textwidth}{l p{4cm}rrrrrrp{4cm}}
+    \hline
+     GOID & Description & Fisher & Fisher & FDR & Intersect &  GO            & GO &  Intersect \\ 
+          &             & \_Pvalue & \_odds &   & \_Count   & \_gene         & \_gene & \_gene \\ 
+          &             &          &        &   &           & \_inBackground & \_raw  \\
+          &             &          &        &   &           &                & \_Count  \\
+    \hline
+    GO:0000502 & 
+    A large multisubunit complex which catalyzes protein degradation, found in eukaryotes, archaea and some bacteria. In eukaryotes, this complex consists of the barrel shaped proteasome core complex and one or two associated proteins or complexes that act in regulating entry into or exit from the core.
+    & 0.005833995 & 4.005423 & 0.1030672 & 6 & 55 & 55 &
+    PSMA3 PSMB5 PSMC1 PSMC6 PSME1 PSME2
+    \\
+    GO:0005654 & 
+    That part of the nuclear content other than the chromosomes or the nucleolus.
+    & 0.005480159 & 1.562667 & 0.1030672 & 48 & 1079 & 1084 &
+    AKT1 APEX1 ESR2 ESRRB FOS GTF2A1 BRF1 HIF1A HNRNPC ATXN3 MNAT1 POLE2 PPM1A PSMA3 PSMA6 PSMB5 PSMC1 PSMC6 PSME1 PSME2 RAD51B SRSF5 SNAPC1 NKX2-1 VRK1 PABPN1 GEMIN2 RPS6KA5 MED6 PARP2 IRF9 SIVA1 PAPOLA WDHD1 SUPT16H ZBTB1 SNW1 RCOR1 SYNE2 TINF2 STRN3 CPSF2 MIS18BP1 METTL3 FANCM LIN52 EGLN3 ZBTB42
+    \\
+    GO:0005737 & 
+    All of the contents of a cell excluding the plasma membrane and nucleus, but including other subcellular structures.
+    & 0.005777189 & 1.318050 & 0.1030672 & 154 & 4241 & 4262 &
+    CTN1 AKT1 APEX1 ARHGAP5 CDKN3 CRIP1 EIF5 EML1 FUT8 GCH1 GPX2 GTF2A1 GZMB HIF1A HSP90AA1 LGALS3 MAX ATXN3 MMP14 MNAT1 MYH6 MYH7 NFATC4 NFKBIA PNP OTX2 PNN PPP2R5E PRKCH PRKD1 PSMA3 PSMA6 PSMC1 PSME1 PYGL MOK RPS29 SRSF5 SIX1 SPTB SRP54 SSTR1 STYX TEP1 VRK1 WARS XRCC3 ZBTB25 PABPN1 GEMIN2 CDKL1 EIF2B2 MTA1 PNMA1 RPS6KA5 AKAP6 CDC42BPB RGS6 KIAA0586 DLGAP5 AREL1 DHRS2 GPHN EFS IRF9 PRMT5 BATF SIVA1 AHSA1 EXOC5 PAPOLA FERMT2 PTPN21 WDHD1 MAP4K5 VASH1 ATG14 ACIN1 DAAM1 SAMD4A TTLL5 SYNE2 PPP1R13B SLC7A8 HECTD1 NGDN SIPA1L1 PLEK2 STXBP6 STRN3 EMC9 DACT1 EVL GSKIP MBIP C14ORF166 HAUS4 PPP2R3C RNF31 DNAAF2 G2E3 OSGEP SMEK1 ARHGEF40 TDP1 EAPP ACTR10 NDRG2 HOMEZ BEGAIN PPP4R4 RBM25 SNX6 SAV1 VIPAS39 NPAS3 MOAP1 MPP5 INF2 VCPKMT IPO4 CLMN ZC3H14 CCDC176 DDHD1 INSM2 STON2 LRRC16B TTC5 EGLN3 DTD2 IFT43 AHNAK2 TRIM9 AK7 ADSSL1 TPPP2 KLHDC1 FRMD6 NAA30 TTC8 PTGR2 CEP128 FAM71D EML5 ADCY4 RALGAPA1 NUDT14 CEP170B SERPINA9 VSX2 RAB15 TBPL2 ZBTB42
+    \\
+    GO:0005925 & 
+    Small region on the surface of a cell that anchors the cell to the extracellular matrix and that forms a point of termination of actin filaments.
+    & 0.013457685 & 2.521190 & 0.1783143 & 9 & 126 & 126 & 
+    ACTN1 MYH6 MYH7 PNMA1 FERMT2 SYNE2 EVL ZFYVE21 AJUBA
+    \\
+    GO:0016363 & 
+    The dense fibrillar network lying on the inner side of the nuclear membrane.
+    & 0.020332481 & 2.693310 & 0.2155243 & 7 & 92 & 92 &
+    CFL2 ATXN3 PSMA6 TEP1 YY1 SNW1 TINF2
+    \\
+    GO:0031012 & 
+    A structure lying external to one or more cells, which provides structural support for cells or tissues; may be completely external to the cell (as in animals and bacteria) or be part of the cell (as in plants).
+    &  0.027588992 & 2.245376 & 0.2437028 & 10 & 156 & 157 &
+    CMA1 CRIP2 CTSG HSP90AA1 LGALS3 LTBP2 MMP14 TGFB3 FBLN5 NID2
+    \\
+    \hline
+    \end{tabular*}}
+          %\label{table:GO CC of gene2pathway result.FET}
+      %\caption{GO CC of gene2pathway result.FET}
+      \end{table} 
+
+\begin{verbatim}
+> head(FS_test$GO_BP)
+\end{verbatim}
+
+      \begin{table}[H]
+        \centering
+         \tiny
+        \resizebox{\textwidth}{!}{%
+             \begin{tabular*}{\textwidth}{l p{4cm}rrrrrrp{4cm}}
+    \hline
+     GOID & Description & Fisher & Fisher & FDR & Intersect &  GO            & GO &  Intersect \\ 
+          &             & \_Pvalue & \_odds &   & \_Count   & \_gene         & \_gene & \_gene \\ 
+          &             &          &        &   &           & \_inBackground & \_raw  \\
+          &             &          &        &   &           &                & \_Count  \\
+    \hline
+    GO:0030162 & 
+    Any process that modulates the frequency, rate or extent of the hydrolysis of a peptide bond or bonds within a protein.
+    & 1.173994e-07 & 11.802616 & 1.361833e-05 & 10 & 38 & 39 &
+    SERPINA3 SERPINA6 SERPINA5 SERPINA1 SERPINA4 TRAF3 SERPINA10 SERPINA12 SERPINA11 SERPINA9
+    \\
+    GO:0090501 & 
+    The RNA metabolic process in which the phosphodiester bonds between ribonucleotides are cleaved by hydrolysis.
+    & 1.361482e-05 & 15.122011 & 7.896593e-04 & 6 & 19 & 19 &
+    ANG RNASE2 RNASE3 RNASE6 DICER1 RNASE7
+    \\
+    GO:0006521 & 
+    Any process that modulates the frequency, rate or extent of the chemical reactions and pathways involving amino acids.
+    & 1.252248e-04 & 6.113560 & 3.386585e-03 & 8 & 51 & 51 &
+    PSMA3 PSMA6 PSMB5 PSMC1 PSMC6 PSME1 PSME2 PSMB11
+    \\
+    GO:0006977 & 
+    A cascade of processes induced by the cell cycle regulator phosphoprotein p53, or an equivalent protein, in response to the detection of DNA damage and resulting in the stopping or reduction in rate of the cell cycle.
+    & 1.459735e-04 & 5.195514 & 3.386585e-03 & 9 & 66 & 66 & 
+    PPP2R5C PSMA3 PSMA6 PSMB5 PSMC1 PSMC6 PSME1 PSME2 PSMB11
+    \\
+    GO:0034641 & 
+    The chemical reactions and pathways involving various organic and inorganic nitrogenous compounds, as carried out by individual cells.
+    & 1.439655e-04 & 3.141606 & 3.386585e-03 & 16 & 185 & 185 &
+    ARG2 CKB DIO2 DIO3 DLST GSTZ1 ALDH6A1 PSMA3 PSMA6 PSMB5 PSMC1 PSMC6 PSME1 PSME2 SLC25A21 PSMB11
+    \\
+    GO:0010951 & 
+    Any process that decreases the frequency, rate or extent of endopeptidase activity, the endohydrolysis of peptide bonds within proteins.
+    & 2.437280e-04 & 4.333480 & 4.712075e-03 & 10 & 86 & 87 &
+    SERPINA3 AKT1 SERPINA6 SERPINA5 SERPINA1 SERPINA4 SERPINA10 SERPINA12 SERPINA11 SERPINA9
+    \\
+    \hline
+    \end{tabular*}}
+          %\label{table:GO BP of gene2pathway result.FET}
+      %\caption{GO BP of gene2pathway result.FET}
+      \end{table} 
+
+\begin{verbatim}
+> head(FS_test$GO_MF)
+\end{verbatim}
+
+      \begin{table}[H]
+        \centering
+         \tiny
+        \resizebox{\textwidth}{!}{%
+             \begin{tabular*}{\textwidth}{l p{4cm}rrrrrrp{4cm}}
+    \hline
+     GOID & Description & Fisher & Fisher & FDR & Intersect &  GO            & GO &  Intersect \\ 
+          &             & \_Pvalue & \_odds &   & \_Count   & \_gene         & \_gene & \_gene \\ 
+          &             &          &        &   &           & \_inBackground & \_raw  \\
+          &             &          &        &   &           &                & \_Count  \\
+    \hline
+    GO:0016892 & 
+    Catalysis of the hydrolysis of ester linkages within ribonucleic acids by creating internal breaks to yield 3'-phosphomonoesters.
+    & 1.516246e-14 & Inf & 7.126354e-13 & 9 & 9 & 9 &
+    ANG RNASE3 RNASE6 RNASE7 RNASE11 RNASE10 RNASE9 RNASE13 RNASE12
+    \\
+    GO:0004540 & 
+    Catalysis of the hydrolysis of phosphodiester bonds in chains of RNA.
+    & 8.567360e-06 & 27.780287 & 2.013330e-04 & 5 & 11 & 11 &
+    ANG RNASE2 RNASE3 RNASE6 RNASE7
+    \\
+    GO:0003676 & 
+    Interacting selectively and non-covalently with any nucleic acid.
+    & 2.015129e-04 & 3.039566 & 3.157036e-03 & 16 & 194 & 201 &
+    RNASE1 RNASE2 RNASE3 RNASE4 RNASE6 ACIN1 EXD2 NYNRIN RNASE7 TDRD9 RNASE11 RNASE8 RNASE10 RNASE9 RNASE13 RNASE12
+    \\
+    GO:0004867 & 
+    Stops, prevents or reduces the activity of serine-type endopeptidases, enzymes that catalyze the hydrolysis of nonterminal peptide bonds in a polypeptide chain; a serine residue (and a histidine residue) are at the active center of the enzyme.
+    & 3.649925e-04 & 4.094258 & 4.288661e-03 & 10 & 92 & 95 & 
+    SERPINA3 SERPINA6 SERPINA5 SERPINA1 SERPINA4 SERPINA10 PAPLN SERPINA12 SERPINA11 SERPINA9
+    \\
+    GO:0016887 & 
+    Catalysis of the reaction: ATP + H2O = ADP + phosphate + 2 H+. May or may not be coupled to another reaction.
+    & 1.582132e-02 & 2.618043 & 1.487204e-01 & 8 & 110 & 110 &
+    DYNC1H1 HSP90AA1 MYH6 MYH7 PSMC1 PSMC6 ACIN1 MLH3
+    \\
+    GO:0003713 & 
+    Interacting selectively and non-covalently with a activating transcription factor and also with the basal transcription machinery in order to increase the frequency, rate or extent of transcription. Cofactors generally do not bind DNA, but rather mediate protein-protein interactions between activating transcription factors and the basal transcription machinery.
+    &  4.675915e-02 & 1.848382 & 1.997891e-01 & 12 & 229 & 229 &
+    APEX1 ESR2 ESRRB GTF2A1 MAX NFATC4 YY1 TRIP11 MED6 RIPK3 SNW1 SETD3
+    \\
+    \hline
+    \end{tabular*}}
+          %\label{table:GO MF of gene2pathway result.FET}
+      %\caption{GO MF of gene2pathway result.FET}
+      \end{table} 
+
+          \end{itemize}
+            
+    \subsubsection{Add description for genes}
+The function addDescription is wrapped from R package ``biomaRt'' \cite{Durinck09}\cite{Durinck05} to converts gene hgnc\_symbol to gene description.
+        \begin{itemize}
+          \item Inputs/parameters: 
+            \begin{description}
+              \item[genome]{A character specifies the genome type. Currently, choice ``hg19'', ``mm10'', and ``mm9'' is supported.}
+              \item[genevector]{A characteristic vector or list of gene symbols.}       
+            \end{description}
+          \item Output: \\
+          A data frame with two columns, first is the input genelist and second is the biomaRt gene description in details. 
+          \item An example:
+          \begin{verbatim}
+> gene_description<-addDescription(genome="hg19",genevector=as.vector(rownames(dat_chip)))
+> head(gene_description)
+          \end{verbatim}
+          
+      \begin{table}[H]
+        \centering
+         \small
+          \resizebox{\textwidth}{!}{%
+             \begin{tabular*}{\textwidth}{rr}
+                \hline
+                 hgnc\_symbol & description \\ 
+                \hline
+                ABCD4 & ATP-binding cassette, sub-family D (ALD),  member 4  [Source:HGNC Symbol;Acc:68 ] \\
+                ABHD12B & abhydrolase domain containing 12B [Source:HGNC Symbol;Acc:19837] \\
+                ABHD4 & abhydrolase domain containing 4 [Source:HGNC Symbol;Acc:20154] \\
+                ACIN1 & apoptotic chromatin condensation inducer 1 [Source:HGNC Symbol;Acc:17066] \\
+                ACOT1 & acyl-CoA thioesterase 1 [Source:HGNC Symbol;Acc:33128] \\
+                ACOT2 & acyl-CoA thioesterase 2 [Source:HGNC Symbol;Acc:18431] \\
+                \hline
+            \end{tabular*}}
+      %\label{}
+      %\caption{add description}
+      \end{table}           
+                         
+        \end{itemize} 
+
+
+%------------------------------------
+  \subsection{RNA-seq data analysis}
+%------------------------------------
+RNA-seq is increasingly used for measuring gene expression levels. Normally, RNA-seq measures multiple samples from more than one sample-groups. Base on expressions on the gene-level, user can run the \texttt{gene2pathway\_test} function and skip the \texttt{runseq2gene()} function. 
+
+Here is an example to run \texttt{gene2pathway\_test} function for RNA-seq data, using an example data in the package.
+\begin{verbatim}
+> data(dat_RNA)
+> head(dat_RNA)
+\end{verbatim}
+      \begin{table}[H]
+        %\centering
+         \small
+          \resizebox{\textwidth}{!}{%
+             \begin{tabular*}{\textwidth}{lrrrrr}
+                %\hline
+                  & TCGA\_2841 &  TCGA\_2840 & TCGA\_2843 & TCGA\_2842 & TCGA\_2845 \\ 
+                %\hline
+                A1BG & 6.3606 & 10.2275 & 1.7113 & 1.7367 & 4.7184 \\
+                A1BG-AS & 8.7010 & 10.7700 & 2.5394 & 2.8203 & 7.8670 \\
+                A1CF & 0.0000 & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+                A2LD1 & 1.2489 & 1.3508 & 2.1397 & 1.9969 & 1.0495 \\
+                A2M & 0.2507 & 2.4767 & 3.3813 & 0.6906 & 1.7197 \\
+                A2ML1 & 0.0710 & 0.0473 & 0.2541 & 0.0538 & 0.1098 \\
+                %\hline
+            \end{tabular*}}
+      %\label{}
+      %\caption{chip RNA}
+      \end{table}  
+
+Using the inputs similar to the example coding for ChIPseq data, the output of the \texttt{gene2pathway\_test} function running RNAseq data will be a matrix of pathway scores for multiple samples.
+\begin{verbatim}
+> dat_gene2path_RNA <- gene2pathway_test(dat=dat_RNA, DataBase=MsigDB_C5, 
+             EmipiricalTest=F, alpha=5, logCheck=F, method="FAIME", na.rm=T)
+> head(dat_gene2path_RNA$gene2pathway_result.2)
+\end{verbatim}
+
+      \begin{table}[H]
+        \centering
+         \tiny
+        \resizebox{\textwidth}{!}{%
+             \begin{tabular*}{\textwidth}{p{1.5cm}p{2cm}rrrrrrp{5cm}}
+    \hline
+     & Des & TCGA & TCGA & TCGA & TCGA  & TCGA  & Intersect & Intersect \\ 
+     &  & 28412 & 28402 & 28432 & 28422 & 28452 & Count & gene \\
+     &  & pathscore & pathscore & pathscore & pathscore & pathscore \\
+     &  & Normalized & Normalized & Normalized & Normalized & Normalized  \\
+    \hline
+    NUCLEOPLASM & http://www.broadinstitute. org/gsea/msigdb/cards /NUCLEOPLASM & 0.3800166  & 0.7017463 & 0.60702357 & 0.72972712 & 0.8866237 & 37 
+    & ACTB ACTL6A ACTL6B APPL1 APPL2 APTX ARID1A ARID1B ARID4A ARNTL ASF1A ASH2L ATF6 ATXN1 ATXN3 BNIP3 C19ORF2 C1ORF124 CBX1 CCNO CD3EAP CDK8 CDK9 CDKN2A CDKN2AIP CHAF1A CHAF1B CHEK2 CIB1 CIR1 CLOCK COIL CPSF1 CPSF3 CPSF3L CPSF6 DKC1 \\ 
+    ORGANELLE\_PART & http://www.broadinstitute. org/gsea/msigdb/cards /ORGANELLE\_PART & 0.7516177 & 0.8067336 & 0.82731623 & 0.86229571 & 0.8968370 & 272
+    & A1CF AAAS AADAC ABCA2 ABCB6 ABCB7 ABCB8 ABCC4 ABCD3 ABCF2 ABL1 ACADM ACD ACN9 ACR ACTA1 ACTB ACTC1 ACTL6A ACTL6B ACTN2 ACTN3 ACTR1A ACTR1B ACTR2 ACTR3 ADAM10 ADAP2 AFTPH AGFG1 AIFM2 AIFM3 AKAP9 ALAS2 ALDH4A1 ALG3 ALMS1 ALS2 AMFR AMOT ANAPC11 ANAPC4 ANAPC5 ANG ANKFY1 ANLN AP1G2 AP1S1 AP2S1 AP3B2 AP4B1 AP4M1 APC API5 APOBEC3F APOBEC3G APPBP2 APPL1 APPL2 APTX ARCN1 ARFGEF2 ARFIP1 ARHGEF2 ARID1A ARID1B ARID4A ARL8A ARL8B ARNTL ARPC1B ARPC2 ARPC3 ARPC4 ARPC5 ASF1A ASH2L ASNA1 ASPH ATF6 ATG4A ATG4B ATG4C ATG4D ATP2C1 ATP5A1 ATP5B ATP5C1 ATP5D ATP5E ATP5F1 ATP5G1 ATP5G2 ATP5G3 ATP5J ATP5O ATP6V1B1 ATP7A ATP7B ATRX ATXN1 ATXN2 ATXN3 AURKA AURKC AZI1 B3GALT6 B4GALT1 BARD1 BAX BBS4 BCAS2 BCKDHA BCKDHB BCKDK BCL2 BCL6 BCS1L BET1 BFSP2 BIRC5 BMF BNIP1 BNIP2 BNIP3 BNIP3L BRCA1 BRCA2 BRCC3 BRE BSCL2 BUB1 BUB1B BUB3 C15ORF29 C19ORF2 C1ORF124 CABP1 CACNA1C CALR CAPG CAPZA1 CAPZA2 CAPZB CASP7 CASQ1 CAV1 CBX1 CBX5 CBY1 CCNH CCNO CCNT1 CD2AP CD3EAP CD63 CDC16 CDC20 CDC23 CDC26 CDC27 CDC40 CDCA5 CDK1 CDK5RAP2 CDK8 CDK9 CDKN2A CDKN2AIP CDT1 CENPA CENPC1 CENPE CENPF CEP250 CEP290 CEP57 CEP63 CETN1 CETN3 CHAF1A CHAF1B CHEK1 CHEK2 CHMP1A CHST2 CHST4 CIB1 CIR1 CIRH1A CKAP5 CLASP1 CLASP2 CLCN3 CLIP1 CLIP2 CLN3 CLN5 CLN6 CLOCK CNTROB COG1 COG2 COG3 COG4 COG5 COG6 COG7 COG8 COIL COPA COPB1 COPB2 COPE COPG COPG2 COPS2 COPZ1 CORO1A COX15 COX18 COX6B2 CPSF1 CPSF3 CPSF3L CPSF6 CROCC CS CSPG5 CTAG2 CTDNEP1 CTNS CUZD1 CWC22 CYCS CYLC1 DAD1 DBT DCTN1 DCTN2 DCTN3 DCTN4 DCX DDOST DDX11 DDX19B DDX21 DDX23 DDX24 DDX47 DDX54 DDX56 DEDD DEDD2 DERL1 DERL2 DERL3 DHCR7 DHRS9 DHX15 DHX8 DKC1 DLGAP5 DMBT1 DMC1 DNAH9 DNAI2 DNAJA3 DNAJB9 DNALI1 DNM1L DNMT3A \\
+    CELL\_PROJECTION \_PART & http://www.broadinstitute. org/gsea/msigdb/cards /CELL\_PROJECTION\_PART & -1.0863671 & -1.1430708 & -0.89560385 & -0.76891405 & -0.9987234 & 9
+    & ACTN2 ATP6V0A4 B4GALT1 CABP4 CDK5R1 CROCC DNAH9 DNAI2 DNALI1 \\
+     CYTOPLASMIC \_VESICLE\_MEMBRANE  & http://www.broadinstitute. org/gsea/msigdb/cards /CYTOPLASMIC \_VESICLE\_MEMBRANE  & 1.5531183  & 1.5750084  &  1.51152263 & 1.79550412  & 0.2484891 & 15
+    &  ABCC4 AFTPH AP1G2 AP1S1 AP2S1 ARCN1 COPA COPB1 COPB2 COPE COPG COPG2 COPZ1 CSPG5 CUZD1 DMBT1 \\
+     GOLGI\_MEMBRANE  & http://www.broadinstitute. org/gsea/msigdb/cards /GOLGI\_MEMBRANE  & 0.1813367  & 0.1063748  & 0.03454226  & 0.29232424 & 0.2617705 & 8
+    &  AFTPH AP1G2 AP1S1 ARFGEF2 ARFIP1 ATP2C1 ATP7A BET1 BNIP3 CAV1 CLN3 COG2 COPB1 COX18 CSPG5 \\    
+    \hline
+    \end{tabular*}}
+          %\label{table:gene2path}
+      %\caption{result of gene2pathway}
+      \end{table}
+
+\begin{verbatim}
+> head(dat_gene2path_RNA$gene2pathway_result.FET)
+\end{verbatim}
+
+      \begin{table}[H]
+        \centering
+         \tiny
+        \resizebox{\textwidth}{!}{%
+             \begin{tabular*}{\textwidth}{p{2cm} p{3cm}rrrrrrp{3cm}}
+    \hline
+     GeneSet & Description & Fisher & Fisher & FDR & Intersect &  MsigDB     & MsigDB &  Intersect \\ 
+          &             & \_Pvalue & \_odds &   & \_Count   & \_gene         & \_gene & \_gene \\ 
+          &             &          &        &   &           & \_inBackground & \_raw  \\
+          &             &          &        &   &           &                & \_Count  \\
+    \hline
+     HYDROLASE\_ACTIVITY \_ACTING\_ON\_ACID \_ANHYDRIDESCATALYZING \_TRANSMEMBRANE\_MOVEMENT\_OF \_SUBSTANCES & 
+    http://www.broadinstitute.org/gsea/ msigdb/cards/HYDROLASE \_ACTIVITY\_ACTING\_ON\_ACID \_ANHYDRIDESCATALYZING\_TRANSMEMBRANE\_MOVEMENT \_OF\_SUBSTANCES
+    & 1.606744e-20 & 56.6790665 &  1.584249e-17 & 37 & 39 & 39 &
+    ABCF1 ABCA8 ATP6V0E1 ATP1B1 ATP1B3 ATP1B2 ATP6V1B2 ABCA3 ATP2B1 ATP6V0C ATP2B3 ATP2B4 ATP8B1 ABCD3 ABCD4 ATP4A ABCB11 ATP4B ATP11B ATP1A3 ATP1A4 ATP1A1 ATP1A2 ABCB7 ABCG1 ABCG2 ATP6V1C1 ATP7A ATP2A2 ATP2A3 ATP2C1 ATP2A1 ABCC3 ABCC1 ABCC2 ATP7B ABCC6
+    \\
+    CHEMOKINE\_RECEPTOR \_BINDING & 
+    http://www.broadinstitute.org/gsea/ msigdb/cards/CHEMOKINE \_RECEPTOR\_BINDING
+    & 9.352298e-20 & 29.8938093 & 4.016531e-17 & 39 & 43 & 43 &
+    CXCL1 CCL1 CCL3 CCL2 CXCL5 CXCL3 CXCL2 C5 CXCL9 CCL8 CXCL6 CX3CL1 CXCL11 CCL5 CCL4 CCL28 CXCL12 CCL27 CCL7 CCL26 CXCL10 CCL24 CCL25 CCL22 CCL23 CCL20 CCL21 CKLF CCL19 CCL16 CCL15 CCL18 CCL17 CCL11 CCL13 CXCL14 CXCL13 CXCL16 CCR2
+    \\
+    PRIMARY\_ACTIVE \_TRANSMEMBRANE\_TRANSPORTER \_ACTIVITY & 
+    http://www.broadinstitute.org/gsea/ msigdb/cards/PRIMARY\_ACTIVE \_TRANSMEMBRANE\_TRANSPORTER\_ACTIVITY
+    & 1.629424e-19 & 37.7811394 & 4.016531e-17 & 37 & 40 & 40 &
+    ABCA8 ABCF1 ATP6V0E1 ATP1B1 ATP1B3 ATP1B2 ATP6V1B2 ABCA3 ATP2B1 ATP6V0C ATP2B3 ATP2B4 ATP8B1 ABCD3 ABCD4 ATP4A ATP4B ABCB11 ATP11B ATP1A3 ATP1A4 ATP1A1 ATP1A2 ABCB7 ABCG1 ABCG2 ATP7A ATP6V1C1 ATP2A2 ATP2C1 ATP2A3 ATP2A1 ABCC3 ABCC1 ABCC2 ATP7B ABCC6
+    \\
+    ATPASE\_ACTIVITY \_COUPLED\_TO \_MOVEMENT\_OF\_SUBSTANCES & 
+    http://www.broadinstitute.org/gsea/ msigdb/cards/ATPASE\_ACTIVITY \_COUPLED\_TO\_MOVEMENT\_OF \_SUBSTANCES
+    & 1.629424e-19 & 37.7811394 & 4.016531e-17 & 37 & 40 & 40 & 
+    ABCA8 ABCF1 ATP1B1 ATP6V0E1 ATP1B3 ATP1B2 ATP6V1B2 ABCA3 ATP2B1 ATP6V0C ATP2B3 ATP2B4 ATP8B1 ABCD3 ABCD4 ATP4A ABCB11 ATP4B ATP11B ATP1A3 ATP1A4 ATP1A1 ATP1A2 ABCB7 ABCG1 ABCG2 ATP7A ATP6V1C1 ATP2A2 ATP2C1 ATP2A3 ATP2A1 ABCC3 ABCC1 ABCC2 ABCC6 ATP7B
+    \\
+    CHEMOKINE\_ACTIVITY & 
+    http://www.broadinstitute.org/gsea/ msigdb/cards/CHEMOKINE\_ACTIVITY
+    & 3.451615e-19 & 29.1130402 & 6.806585e-17 & 38 & 42 & 42 &
+    CXCL1 CCL1 CCL3 CCL2 CXCL5 CXCL3 CXCL2 C5 CXCL9 CCL8 CXCL6 CX3CL1 CCL5 CXCL11 CXCL12 CCL28 CCL4 CCL27 CCL7 CXCL10 CCL26 CCL24 CCL25 CCL22 CCL23 CCL20 CCL21 CKLF CCL19 CCL16 CCL15 CCL18 CCL17 CCL11 CCL13 CXCL14 CXCL13 CXCL16
+    \\
+    BIOPOLYMER\_METABOLIC \_PROCESS & 
+    http://www.broadinstitute.org/gsea/ msigdb/cards/BIOPOLYMER \_METABOLIC\_PROCESS
+    & 1.206876e-15 & 0.5818938 & 1.983299e-13  & 294 & 1673 & 1684 &
+    BTK DHX38 BRAF ARIH1 DHX8 CELF1 ATR C19ORF2 ATM CDC42BPG CDC42BPA CDC42BPB CWC15 AUH BRD7 BRD8 ATF7IP BRF1 AIFM1 ARHGEF11 DHX15 DHX16 ATRX CSNK1D CSNK1E CDKN2A CDKN2D ATG7 BCL10 CSDA BICD1 CCL2 CXXC1 AIMP1 ATG3 ATF6 ATF5 ATF4 ATF7 ADRA1D DDB1 DDB2 DMC1 BRSK2 BRSK1 CEBPZ DCLK1 CEBPA CEBPB CEBPD CEBPG CBL BAX ALKBH1 DDX17 ANAPC2 BCR ANAPC5 ANAPC4 CD37 CAMK4 CAMK1 AMFR DEAF1 ACD CIDEA CCNO CTBP1 CCNK CCNH APTX CDK16 CDK17 AGA CSNK1A1 COG3 COG7 COG2 APOBEC3G APOBEC3F ATOH1 CSNK1G2 AHR CSNK1G3 CSTA BLM BMX BRCA2 BRCA1 DGCR8 ANG ALX1 ALK CD3EAP CD80 CD81 CDK11A CDK11B CAMK2B CAMK2A ATXN3 BMPR1B BMPR1A CRNKL1 CDC6 CCND1 CCND3 CCND2 CLOCK CREM CDC45 CCL11 B3GALNT1 ARID1A DDIT3 ACHE CNBP CCRN4L B4GALT7 ARID4A ALG1 ALG2 ALG5 ALG6 DEK ALG8 CLCF1 ARID5B ARID5A CDK9 CDK7 CDK2 CHRM3 CHRM1 APH1A ADAMTS13 APH1B A4GNT DBP CDX2 B3GALT5 B3GALT4 COL4A3BP CSGALNACT1 AGGF1 BMP4 BMP2 ADPRH BMP6 ADAR CCNT2 COPS2 COPS5 CCNT1 DMAP1 CAMKK2 CDT1 ASH2L ADAM10 CTNNBIP1 ASH1L CHM BCAS2 CIR1 CRABP2 DMPK DARS ARNTL DERL2 DERL1 ANAPC10 ANAPC11 CSTF3 CSTF2 AKTIP CSTF1 AKT1 CSK AKT3 AKT2 DAPK2 DAPK3 DAPK1 B3GALT2 DIS3 CRK BACE2 CPSF3L CRTC1 BNIP3 CUZD1 DAXX CARD14 ABI3 ABI2 ABI1 ARAF DBF4 CSNK2A1 CIB1 DFFA DFFB ABCA2 ASF1A BRIP1 DNASE2 ABL1 ABL2 DKC1 CYCS AGER CHIA AURKC AURKA CDK12 ABT1 AFAP1L2 CALR BCOR ALG12 ACVRL1 ART1 ART3 CTDP1 ATG12 BCL6 DNMT1 DBR1 CHUK CHST4 CHST5 CHST1 BPTF CHST7 CUX1 CITED1 CITED2 DNMT3B ARHGEF10L DNMT3A CREG1 BATF3 CSGALNACT2 CIAO1 CAND1 BTRC CBFB DDX23 CPA2 DDX20 CECR2 AIPL1 DDX54 CTCF CDK2AP1 CPSF6 CPSF3 CARM1 CPSF1 ACVR1 ADAT1 CHD2 CHD1 CHD4 CHD3 ANXA1 CREB5 AARS CD40LG CHEK1 CDC40 CREBBP CDC23 CDC20 CBLC BLZF1 ABCE1 CHMP1A AFF4 CDKL3 CDKL5 ADRM1 CDKL1 CHIT1 B3GNT8 B3GNT5 BTF3 BUD31 ACVR1B CCDC88A CCDC88C BTG2 APEX1 CBY1
+    \\
+    \hline
+    \end{tabular*}}
+          %\label{}
+      %\caption{RNA FET}
+      \end{table} 
+
+
+
+%------------------------------------
+  \section{R environment session}
+%------------------------------------
+<<importseq2pathway>>=
+require(seq2pathway)
+@
+
+<<sessionInfo>>=
+sessionInfo();
+@ 
+
+
+
+\begin{thebibliography}{50}
+
+    \bibitem{yang14} X. Yang, B. Wang, J. M. Cunningham,
+    \emph{Identification of epigenetic modifications that contribute to pathogenesis in therapy-related AML: Effective integration of genome-wide histone modification with transcriptional profiles}, 
+    preprint (2015),  BMC Medical Genomics(accepted).
+
+    \bibitem{yang12} X. Yang, K. Regan, Y. Huang, Q. Zhang, J. Li, T. Y. Seiwert, et al.,
+    \emph{Single sample expression-anchored mechanisms predict survival in head and neck cancer}, 
+    PLoS Comput Biol \textbf{8} (2012), e1002350.
+        
+    \bibitem{Liberzon11} A. Liberzon, A. Subramanian, R. Pinchback, H. Thorvaldsdottir, P. Tamayo, J. P. Mesirov,
+    \emph{Molecular signatures database (MSigDB) 3.0}, 
+    Bioinformatics \textbf{27} (2011), 1739--1740.
+
+    \bibitem{Langfelder08} Langfelder P, Horvath S,
+    \emph{WGCNA: an R package for weighted correlation network analysis}, 
+    BMC Bioinformatics \textbf{9} (2008), 559.
+
+    \bibitem{Subramanian05} A. Subramanian, P. Tamayo, V. K. Mootha, S. Mukherjee, B. L. Ebert, M. A. Gillette, et al.,
+    \emph{Gene set enrichment analysis: a knowledge-based approach for interpreting genome-wide expression profiles}, 
+    Proc Natl Acad Sci USA \textbf{102} (2005), 15545--15550.
+   
+    \bibitem{Lander01} E. S. Lander, L. M. Linton, B. Birren, C. Nusbaum, M. C. Zody, J. Baldwin, et al.,
+    \emph{Initial sequencing and analysis of the human genome}, 
+    Nature \textbf{409} (2001), 860--921.
+ 
+    \bibitem{Hoffmann14} Hoffmann A, Yang X, Burnicka-Turek O, Bosman J, Ren X, Hanson E, et al.,
+    \emph{Foxf genes integrate Tbx5 and Hedgehog pathways in the second heart field for atrial septation}, 
+    PLoS Genetics (2014), DOI: 10.1371/journal.pgen.1004604.
+    
+    \bibitem{van14} van den Boogaard M, Smemo S, et al.,
+    \emph{Initial sequencing and analysis of the human genome}, 
+    J Clin Invest. \textbf{124} (2014), 1844--1852.    
+
+    \bibitem{Laat13} W. de Laat, D. Duboule,
+    \emph{Topology of mammalian developmental enhancers and their regulatory landscapes}, 
+    Nature \textbf{502} (2013), 499--506.
+    
+    \bibitem{Heintzman09} N. D. Heintzman, B. Ren,
+    \emph{Finding distal regulatory elements in the human genome}, 
+    Current opinion in genetics \& development \textbf{19} (2009), 541--549.
+
+    \bibitem{Visel09}  A. Visel, E. M. Rubin, L. A. Pennacchio,
+    \emph{Genomic views of distant-acting enhancers}, 
+    Nature \textbf{461} (2009), 199--205.
+    
+    \bibitem{Derrien12}  T. Derrien, R. Johnson, G. Bussotti, A. Tanzer, S. Djebali, H. Tilgner, et al.,
+    \emph{The GENCODE v7 catalog of human long noncoding RNAs: analysis of their gene structure, evolution, and expression}, 
+    Genome Res \textbf{22} (2012), 1775--1789.
+
+    \bibitem{Walton04}  J. D. Walton, D. R. Kattan, S. K. Thomas, B. A. Spengler, H. F. Guo, J. L. Biedler, et al.,
+    \emph{Characteristics of stem cells from human neuroblastoma cell lines and in tumors}, 
+    Neoplasia \textbf{6} (2004), 838--845.
+
+    \bibitem{Lottaz06}  C. Lottaz, X. Yang, S. Scheid, R. Spang,
+    \emph{OrderedList-a bioconductor package for detecting similarity in ordered gene lists}, 
+    Bioinformatics \textbf{22} (2006), 2315--2316.
+   
+    \bibitem{Benjamini95}  Y. Benjamini, Y. Hochberg,
+    \emph{Controlling the False Discovery Rate: A Practical and Powerful Approach to Multiple Testing}, 
+    Journal of the Royal Statistical Society. Series B (Methodological) \textbf{57} (1995), 289--300.
+    
+    \bibitem{Durinck09}  S. Durinck, P. T. Spellman, E. Birney, W. Huber,
+    \emph{Mapping identifiers for the integration of genomic datasets with the R/Bioconductor package biomaRt}, 
+    Nat Protoc \textbf{4} (2009), 1184--1191.
+
+    \bibitem{Durinck05}  S. Durinck, Y. Moreau, A. Kasprzyk, S. Davis, B. De Moor, A. Brazma, et al.,
+    \emph{BioMart and Bioconductor: a powerful link between biological databases and microarray data analysis}, 
+    Bioinformatics \textbf{21} (2005), 3439--3440.  
+
+    \bibitem{Perez13} A. Perez-Rathke, H. Li, Y. Lussier,
+    \emph{Interpreting personal transcriptomes: personalized mechanism\-scale profiling of RNA\-seq data},
+    Pac Symp Biocomput. (2013) 159--170.
+
+\end{thebibliography}  
+
+
+
+\end{document}
