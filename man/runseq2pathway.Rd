@@ -11,7 +11,7 @@ A wrapper function to perform seq2gene and gene2pathway in series.
 runseq2pathway(inputfile,
                search_radius=150000, promoter_radius=200, promoter_radius2=100, 
                genome=c("hg38","hg19","mm10","mm9"), adjacent=FALSE, SNP= FALSE, 
-               PromoterStop=FALSE, NearestTwoDirection=TRUE,
+               PromoterStop=FALSE, NearestTwoDirection=TRUE,UTR3=FALSE,
                DataBase=c("GOterm"), FAIMETest=FALSE, FisherTest=TRUE,
                collapsemethod=c("MaxMean","function","ME",
                "maxRowVariance","MinMean","absMinMean","absMaxMean","Average"), 
@@ -78,6 +78,9 @@ runseq2pathway(inputfile,
   }
   \item{NearestTwoDirection}{
   A boolean, "TRUE" by default to output the closest left and closest right coding genes with directions. Otherwise, output only the nearest coding gene regardless of direction.
+  }
+  \item{UTR3}{
+  A boolean, "FALSE" by defalt to calculate the distance from genes' 5UTR. Otherwsie, calculate the distance from genes' 3UTR.   
   }
   \item{DataBase}{
   A character string assigns an R GSA.genesets object to define gene-set. User can call GSA.read.gmt to load customized gene-sets with a .gmt format. If not specified, GO defined gene sets (BP,MF,CC) will be used.

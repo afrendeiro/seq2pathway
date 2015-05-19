@@ -550,7 +550,7 @@ if(class(gsmap)=="GSA.genesets"){
 
 rownames(res) <- seeds
 colnames(res) <- c(paste(colnames(dat),"2pathscore",sep=""))
-print("gene2pathay calculates score....... done")
+print("gene2pathway calculates score....... done")
 return(res)
 }
 
@@ -646,10 +646,10 @@ return(res_p)
 
 #function 14
 runseq2gene <-
-  function(inputfile,search_radius=150000,promoter_radius=200,promoter_radius2=100,genome=c("hg38","hg19","mm10","mm9"),
-           adjacent=FALSE,SNP= FALSE,PromoterStop=FALSE,NearestTwoDirection=TRUE){
+    function(inputfile,search_radius=150000,promoter_radius=200,promoter_radius2=100,genome=c("hg38","hg19","mm10","mm9"),
+           adjacent=FALSE,SNP= FALSE,PromoterStop=FALSE,NearestTwoDirection=TRUE,UTR3=FALSE){
     
-    
+    options(scipen=999)
     if(missing(inputfile)){stop("please give the input file")}
     if(! class(inputfile) %in% c("data.frame","GRanges")){stop("please check the format of input file")}
     
@@ -662,6 +662,7 @@ runseq2gene <-
     if(missing(adjacent)){adjacent= "False"}
     if(missing(PromoterStop)){PromoterStop= "False"}
     if(missing(NearestTwoDirection)){NearestTwoDirection= "True"}
+    if(missing(UTR3)){UTR3= "False"}
     
     if(SNP %in% c("T","TRUE","True",TRUE)){SNP= "True"}
     if(SNP %in% c("F","FALSE","False",FALSE)){SNP= "False"}
@@ -672,6 +673,9 @@ runseq2gene <-
     if(NearestTwoDirection %in% c("T","TRUE","True",TRUE)){NearestTwoDirection= "True"}
     if(NearestTwoDirection %in% c("F","FALSE","False",FALSE)){NearestTwoDirection= "False"}
     
+    if(UTR3 %in% c("T","TRUE","True",TRUE)){UTR3= "True"}
+    if(UTR3 %in% c("F","FALSE","False",FALSE)){UTR3= "False"}
+    
     if(adjacent %in% c("T","TRUE","True",TRUE)){adjacent= "True"}
     if(adjacent %in% c("F","FALSE","False",FALSE)){adjacent= "False"}
     if(adjacent== "True"){search_radius =0}
@@ -679,7 +683,7 @@ runseq2gene <-
     if(length(genome>1)){genome=genome[1]}
     
     ### assign the path of main function
-    path<-paste(system.file(package="seq2pathway"),"/scripts/Function_PeakMutationAnnotation_GENCODE_01022015.py",sep="/")
+    path<-paste(system.file(package="seq2pathway"),"/scripts/Function_PeakMutationAnnotation_GENCODE_05182015.py",sep="/")
     
     ###wrap invoke file
     name<-paste("inputfile",gsub(":","_",gsub("-","",gsub(" ","_",Sys.time()))),"seq2gene_log.py",sep="_")
@@ -693,11 +697,19 @@ runseq2gene <-
       if(ncol(test)<6){stop("please check the format of the input data, some column is missing")}
       if(ncol(test)==6){write.table(test[,c(6,1,2,3)], file=tmpinfile,sep="\t",quote=FALSE,row.names = FALSE)}
       if(ncol(test)>6){write.table(test[,c(6,1,2,3,7)], file=tmpinfile,sep="\t",quote=FALSE,row.names = FALSE)}
-      }
+    }
     tmpinfile = gsub("\\","/",tmpinfile,fixed =TRUE)
     tmpoutfile = tempfile()
     write.table(NULL, file=tmpoutfile,sep="\t",quote=FALSE,row.names = FALSE)
     tmpoutfile = gsub("\\","/",tmpoutfile,fixed =TRUE)
+
+    tmpoutfile_UTR3 = tempfile()
+    write.table(NULL, file=tmpoutfile_UTR3,sep="\t",quote=FALSE,row.names = FALSE)
+    tmpoutfile_UTR3 = gsub("\\","/",tmpoutfile_UTR3,fixed =TRUE)
+    
+    tmp_ref_file = tempfile()
+    write.table(NULL, file=tmp_ref_file,sep="\t",quote=FALSE,row.names = FALSE)
+    tmp_ref_file = gsub("\\","/",tmp_ref_file,fixed =TRUE)
     
     sink(paste(tempdir(),"\\",name,sep=""))
     ###fixed headers import modules
@@ -708,10 +720,10 @@ runseq2gene <-
     cat("",sep="\n")
     ###import our function module
     cat("import imp",sep="\n")
-    cat("imp.load_source('Function_PeakMutationAnnotation_GENCODE_01022015',")
+    cat("imp.load_source('Function_PeakMutationAnnotation_GENCODE_05182015',")
     cat("'", path, "')",sep="")
     cat("",sep="\n")
-    cat("from Function_PeakMutationAnnotation_GENCODE_01022015 import FindPeakMutation",sep="\n")
+    cat("from Function_PeakMutationAnnotation_GENCODE_05182015 import FindPeakMutation",sep="\n")
     cat("",sep="\n")
     
     ####write parameters
@@ -719,6 +731,8 @@ runseq2gene <-
     cat(paste("inputfile=","'",tmpinfile,"'",sep=""),sep="\n")
     #cat(paste("outputpath=","'",outputpath,"/'",sep=""),sep="\n")
     cat(paste("outputfile=","'",tmpoutfile,"'",sep=""),sep="\n")
+    cat(paste("outputfileUTR3=","'",tmpoutfile_UTR3,"'",sep=""),sep="\n")
+    cat(paste("tmp_ref_file=","'",tmp_ref_file,"'",sep=""),sep="\n")
     cat(paste("search_radius=",search_radius,sep=""),sep="\n")
     cat(paste("promoter_radius=",promoter_radius,sep=""),sep="\n")
     cat(paste("promoter_radius2=",promoter_radius2,sep=""),sep="\n")  
@@ -728,13 +742,14 @@ runseq2gene <-
     cat(paste("SNP=",SNP,sep=""),sep="\n")
     cat(paste("PromoterStop=",PromoterStop,sep=""),sep="\n") 
     cat(paste("NearestTwoDirection=",NearestTwoDirection,sep=""),sep="\n")
-    cat("FindPeakMutation(inputfile,outputfile,search_radius,promoter_radius,promoter_radius2,genome,adjacent,pwd,SNP,PromoterStop,NearestTwoDirection)")
+    cat(paste("UTR3=",UTR3,sep=""),sep="\n")
+    cat("FindPeakMutation(inputfile,outputfile,outputfileUTR3,tmp_ref_file,search_radius,promoter_radius,promoter_radius2,genome,adjacent,pwd,SNP,PromoterStop,NearestTwoDirection,UTR3)")
     sink()
     
     #invoke python
     command <- paste("C:/Python27/python ", tempdir(),"\\",name,sep="")
     response <- system(command, intern=TRUE)
-    anno_result<-read.table(file=tmpoutfile,header=TRUE,sep="\t")
+    anno_result<-read.table(file=tmpoutfile_UTR3,header=TRUE,sep="\t")
     seq2gene_result=list()
     seq2gene_result[[1]]<-anno_result
     names(seq2gene_result)[1]<-"seq2gene_FullResult"
@@ -745,10 +760,11 @@ runseq2gene <-
   }
 
 
+
 #function 15
 runseq2pathway<-function(inputfile,
          search_radius=150000,promoter_radius=200,promoter_radius2=100,
-         genome=c("hg38","hg19","mm10","mm9"),adjacent=FALSE,SNP= FALSE,PromoterStop=FALSE,NearestTwoDirection=TRUE,
+         genome=c("hg38","hg19","mm10","mm9"),adjacent=FALSE,SNP= FALSE,PromoterStop=FALSE,NearestTwoDirection=TRUE,UTR3=FALSE,
          DataBase=c("GOterm"),FAIMETest=FALSE,FisherTest=TRUE,
          collapsemethod=c("MaxMean","function","ME","maxRowVariance","MinMean","absMinMean","absMaxMean","Average"),
          alpha=5,logCheck=FALSE,B=100,na.rm=FALSE,min_Intersect_Count=5){
@@ -769,6 +785,7 @@ if(missing(SNP)){SNP = "False"}
 if(missing(adjacent)){adjacent= "False"}
 if(missing(PromoterStop)){PromoterStop= "False"}
 if(missing(NearestTwoDirection)){NearestTwoDirection= "True"}
+if(missing(UTR3)){UTR3= "False"}
 if(missing(collapsemethod)){collapsemethod= "MaxMean"}
 if(missing(B)){B= 100}
 if(missing(alpha)){alpha= 5}
@@ -785,6 +802,9 @@ if(PromoterStop %in% c("F","FALSE","False",FALSE)){PromoterStop= "False"}
 if(NearestTwoDirection %in% c("T","TRUE","True",TRUE)){NearestTwoDirection= "True"}
 if(NearestTwoDirection %in% c("F","FALSE","False",FALSE)){NearestTwoDirection= "False"}
 
+if(UTR3 %in% c("T","TRUE","True",TRUE)){UTR3= "True"}
+if(UTR3 %in% c("F","FALSE","False",FALSE)){UTR3= "False"}
+    
 if(adjacent %in% c("T","TRUE","True",TRUE)){adjacent= "True"}
 if(adjacent %in% c("F","FALSE","False",FALSE)){adjacent= "False"}
 if(adjacent== "True"){search_radius =0}
@@ -803,7 +823,7 @@ data(Des_MF_list,package="seq2pathway.data")
 #######seq2gene function
 seq2gene_result<-runseq2gene(inputfile=inputfile,
             search_radius=search_radius,promoter_radius=promoter_radius,promoter_radius2=promoter_radius2,genome=genome,
-            adjacent=adjacent,SNP=SNP,PromoterStop=PromoterStop,NearestTwoDirection=NearestTwoDirection)
+            adjacent=adjacent,SNP=SNP,PromoterStop=PromoterStop,NearestTwoDirection=NearestTwoDirection,UTR3=UTR3)
 
 seq2gene_result_fornext<-seq2gene_result[[2]]
 seq2gene_result_fornext<-seq2gene_result_fornext[,c(1,13)]
@@ -916,9 +936,11 @@ names(gene2pathway_result)[3]<-c("GO_MF")
 dat_FAIME<-rungene2pathway(dat=dat_CP,gsmap=DataBase,alpha=alpha,logCheck=logCheck,method="FAIME",na.rm=na.rm)
 N_FAIME<-Normalize_F(input=dat_FAIME)
 dat_FAIME_Pvalue<-rungene2pathway_EmpiricalP(dat=dat_CP,gsmap=DataBase,alpha=alpha,logCheck=logCheck,method="FAIME",B=B,na.rm=na.rm)
-DB_N_P<-merge(N_FAIME,dat_FAIME_Pvalue,by="row.names",all=TRUE)
-rownames(DB_N_P)<-DB_N_P$Row.names
-DB_N_P<-DB_N_P[,-1]
+N_FAIME<-as.matrix(N_FAIME)
+dat_FAIME_Pvalue<-as.matrix(dat_FAIME_Pvalue)
+DB_N_P<-cbind(N_FAIME,as.matrix(dat_FAIME_Pvalue[match(rownames(N_FAIME), rownames(dat_FAIME_Pvalue)),]))
+colnames(DB_N_P)<-c("score2pathscore_Normalized","score2pathscore_Pvalue")
+DB_N_P<-as.data.frame(DB_N_P)
 
 for(i in 1:nrow(DB_N_P)){
 if(class(DataBase)=="GSA.genesets"){
@@ -947,12 +969,16 @@ TotalResult[[2]]<-gene2pathway_result
 names(TotalResult)[2]<-"gene2pathway_result.FAIME"
 TotalResult[[3]]<-FS_test
 names(TotalResult)[3]<-"gene2pathway_result.FET"
+TotalResult[[4]]<-dat_CP
+names(TotalResult)[4]<-"gene_collapse"
 }else if(exists("gene2pathway_result")&exists("FS_test")==FALSE){
 TotalResult<-list()
 TotalResult[[1]]<-seq2gene_result
 names(TotalResult)[1]<-"seq2gene_result"
 TotalResult[[2]]<-gene2pathway_result
 names(TotalResult)[2]<-"gene2pathway_result.FAIME"
+TotalResult[[3]]<-dat_CP
+names(TotalResult)[3]<-"gene_collapse"
 }
 else if(exists("gene2pathway_result")==FALSE&exists("FS_test")){
 TotalResult<-list()
@@ -1070,9 +1096,15 @@ dat_method<-rungene2pathway(dat=dat,gsmap=DataBase,alpha=alpha,logCheck=logCheck
 N_method<-Normalize_F(input=dat_method)
 if(EmpiricalTest==TRUE){
 dat_method_Pvalue<-rungene2pathway_EmpiricalP(dat=dat,gsmap=DataBase,alpha=alpha,logCheck=logCheck,method=method,B=B,na.rm=na.rm)
-DB_N_P<-merge(N_method,dat_method_Pvalue,by="row.names",all=TRUE)
-rownames(DB_N_P)<-DB_N_P$Row.names
-DB_N_P<-DB_N_P[,-1]
+N_method<-as.matrix(N_method)
+dat_method_Pvalue<-as.matrix(dat_method_Pvalue)
+if(ncol(dat_method_Pvalue)>1){
+DB_N_P<-cbind(N_method,dat_method_Pvalue[match(rownames(N_method), rownames(dat_method_Pvalue)),]) }
+if(ncol(dat_method_Pvalue)==1){
+DB_N_P<-cbind(N_method,as.matrix(dat_method_Pvalue[match(rownames(N_method), rownames(dat_method_Pvalue)),])) 
+colnames(DB_N_P)<-c("score2pathscore_Normalized","score2pathscore_Pvalue")
+}
+DB_N_P<-as.data.frame(DB_N_P)
 }else{
 DB_N_P=N_method}
 

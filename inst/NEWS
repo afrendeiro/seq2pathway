@@ -1,3 +1,10 @@
+seq2pathway 1.0.1:
+- add parameter UTR3 in function runseq2gene
+
+seq2pathway 1.0.0:
+- Modify function gene2pathway_test
+- Correct some help type
 seq2pathway 0.99.0:
+
 - First submit to Bioconductor.
 

@@ -106,7 +106,7 @@ Currently, \texttt{seq2pathway}  works in both \texttt{Linux} and \texttt{Window
 \begin{verbatim}
 > runseq2pathway(inputfile,   
     search_radius=150000, promoter_radius=200, genome=c("hg19","mm10","mm9"),
-    adjacent=FALSE, SNP= FALSE, PromoterStop=FALSE, NearestTwoDirection=TRUE,
+    adjacent=FALSE, SNP= FALSE, PromoterStop=FALSE, NearestTwoDirection=TRUE,UTR3=FALSE,
     DataBase=c("GOterm"), FAIMETest=FALSE, FisherTest=TRUE,
     collapsemethod= c("MaxMean,"function", "ME", "maxRowVariance", "MinMean", "absMinMean",
     "absMaxMean", "Average"),
@@ -314,6 +314,7 @@ Here we introduce these two main functions separately. For each function, we des
         \item[\textbf{SNP}]{A Boolean specifies the input object type. By default is FALSE to keep on searching for intron and neighboring genes. Otherwise, runseq2gene stops searching when the input genomic region is residing on exon of a coding gene. }
         \item[\textbf{PromoterStop}]{A Boolean, ``FALSE'' by default to keep on searching neighboring genes using the parameter ``search\_radius''. Otherwise, runseq2gene stops searching for neighboring genes. This parameter has function only if an input genomic region map to promoter of coding gene(s). }
         \item[\textbf{NearestTwoDirection}]{A boolean, ``TRUE'' by default to output the closest left and closest right coding genes with directions. Otherwise, output only the nearest coding gene regardless of direction. }  
+        \item[\textbf{UTR3}]{A boolean, ``FALSE'' by default to calculate the distance from genes' 5UTR. Otherwsie, calculate the distance from genes' 3UTR. }  
       \end{description}
 
     \subsubsection{runseq2gene outputs}
@@ -1074,7 +1075,7 @@ Here is an example to run \texttt{gene2pathway\_test} function for RNA-seq data,
 Using the inputs similar to the example coding for ChIPseq data, the output of the \texttt{gene2pathway\_test} function running RNAseq data will be a matrix of pathway scores for multiple samples.
 \begin{verbatim}
 > dat_gene2path_RNA <- gene2pathway_test(dat=dat_RNA, DataBase=MsigDB_C5, 
-             EmipiricalTest=F, alpha=5, logCheck=F, method="FAIME", na.rm=T)
+             EmpiricalTest=F, alpha=5, logCheck=F, method="FAIME", na.rm=T)
 > head(dat_gene2path_RNA$gene2pathway_result.2)
 \end{verbatim}
 

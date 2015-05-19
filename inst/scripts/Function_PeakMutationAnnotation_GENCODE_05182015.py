@@ -1,3 +1,4 @@
+###ADD UTR3 
 ###Add parameter: output nearest one or two from two directions
 ###Add hg38
 ###Add internal promoter promoter_radius2
@@ -10,9 +11,26 @@ from datetime import datetime
 from shutil import rmtree
 
 
-def FindPeakMutation(inputfile,outputfile,search_radius,promoter_radius,promoter_radius2,genome,adjacent,pwd,SNP,PromoterStop,NearestTwoDirection):
+def FindPeakMutation(inputfile,outputfile,outputfileUTR3,tmp_ref_file,search_radius,promoter_radius,promoter_radius2,genome,adjacent,pwd,SNP,PromoterStop,NearestTwoDirection,UTR3):
    print 'python process start:', datetime.now()
    print 'Load Reference'
+   #######################################################
+   #update 05182015, reverse strand of reference gtf for UTR3
+   fout_reftmp = open(tmp_ref_file, 'w')
+   for line in open(pwd + 'gencode.' + genome + '.annotation_GENE_GTF.txt', 'r'):
+      line = line.strip().split('\t')
+      if line[6]=='+':
+         line[6] = '-'
+      elif line[6]=='-':
+         line[6] = '+'
+      else:
+         line[6] = '.'
+      for i in xrange(0,(len(line)-1)):
+         fout_reftmp.write(line[i] + '\t')
+      fout_reftmp.write(line[(len(line)-1)] + '\n')
+   fout_reftmp.close()
+   #######################################################
+   
    # Formatted output.
    def out_string(peak, M, record, comment):
       if record[6] == '+':
@@ -111,7 +129,14 @@ def FindPeakMutation(inputfile,outputfile,search_radius,promoter_radius,promoter
    TRANSCRIPTLeft = []
    transcript_chrm = {}
    ichrm = newChrmId = -1
-   for line in open(pwd + 'gencode.' + genome + '.annotation_GENE_GTF.txt', 'r'):
+
+   ##########update 05182015,UTR3 reference
+   if UTR3 == False:
+      reference_basedon_UTR = pwd + 'gencode.' + genome + '.annotation_GENE_GTF.txt'
+   elif UTR3 == True:
+      reference_basedon_UTR = tmp_ref_file
+   ##########
+   for line in open(reference_basedon_UTR, 'r'):
       line = line.strip().split('\t')
       if line[0][3:] in transcript_chrm:
          ichrm = transcript_chrm[ line[0][3:] ]
@@ -634,6 +659,31 @@ def FindPeakMutation(inputfile,outputfile,search_radius,promoter_radius,promoter
             fout.write(out_string_v2(pkhd, distance, record, 'Neighbor\tN') + '\n')
 
    fout.close()
+
+   ####update 05182015 UTR3
+   fout_utr = open(outputfileUTR3,'w')
+   if UTR3 == False:
+      for line in open(outputfile,'r'):
+         fout_utr.write(line)
+   elif UTR3 == True:
+      nline =0
+      for line in open(outputfile,'r'):
+         nline +=1
+         if nline ==1:
+            fout_utr.write(line)
+         else:
+            line = line.strip().split('\t')
+            if line[11]=='+':
+               line[11] = '-'
+            elif line[11]=='-':
+               line[11] = '+'
+            else:
+               line[11] = '.'
+            for i in xrange(0,(len(line)-1)):
+               fout_utr.write(line[i] + '\t')
+            fout_utr.write(line[(len(line)-1)] + '\n')            
+   fout_utr.close()   
+   ####
 
    print 'Finish Annotation'
    print 'python process end:', datetime.now()

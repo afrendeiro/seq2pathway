@@ -11,7 +11,7 @@ Annotate genome regions of interest to either the nearest TSS or a broader range
 runseq2gene(inputfile, 
             search_radius=150000, promoter_radius=200, promoter_radius2=100, 
             genome=c("hg38","hg19","mm10","mm9"), adjacent=FALSE, SNP=FALSE, 
-            PromoterStop=FALSE,NearestTwoDirection=TRUE)
+            PromoterStop=FALSE,NearestTwoDirection=TRUE,UTR3=FALSE)
 }
 
 \arguments{
@@ -73,6 +73,10 @@ runseq2gene(inputfile,
   }
   \item{NearestTwoDirection}{
   A boolean, "TRUE" by default to output the closest left and closest right coding genes with directions. Otherwise, output only the nearest coding gene regardless of direction.
+  }
+  \item{UTR3}{
+  A boolean, "FALSE" by defalt to calculate the distance from genes' 5UTR. Otherwsie, calculate the distance from genes' 3UTR. 
+  
   }
 }
 
