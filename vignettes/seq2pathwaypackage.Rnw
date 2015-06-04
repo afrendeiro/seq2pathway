@@ -71,10 +71,25 @@
 
 %section1: abstract
 %-------------------------------------------
-\section{Abstract}
+\section{Introduction}
 %--------------------------------------------
+%------------------------------------
+\subsection{Abstract}
+%-------------------------------------
+  \texttt{Seq2pathway} is a novel computational tool to analyze functional gene-sets (including signaling pathways) using variable next-generation sequencing data. Integral to this tool are the ``seq2gene'' and ``gene2pathway'' components in series that infer a quantitative pathway-level profile for each sample. The \texttt{seq2gene} function assigns phenotype-associated significance of genomic regions to gene-level scores, where the significance could be p-values of SNPs or point mutations, protein-binding affinity, or transcriptional expression level. The \texttt{seq2gene} function has the feasibility to assign non-exon regions to a range of neighboring genes besides the nearest one, thus facilitating the study of functional non-coding elements\cite{yang14}. Then the \texttt{gene2pathway} summarizes gene-level measurements to pathway-level scores, comparing the quantity of significance for gene members within a pathway with those outside a pathway. It implements an improved FAIME algorithm together with other three conventional gene-set enrichment analysis methods\cite{yang12}. The output of \texttt{seq2pathway} is a general structured pathway scores, thus allowing one to functionally interpret phenotype-associated significance of genomic regions derived by next generational sequencing experiments. 
+  
 
-  \texttt{Seq2pathway} is a novel computational tool to analyze functional gene-sets (including signaling pathways) using variable next-generation sequencing data. Integral to this tool are the ``seq2gene'' and ``gene2pathway'' components in series that infer a quantitative pathway-level profile for each sample. The \texttt{seq2gene} function assigns phenotype-associated significance of genomic regions to gene-level scores, where the significance could be p-values of SNPs or point mutations, protein-binding affinity, or transcriptional expression level. The \texttt{seq2gene} function has the feasibility to assign non-exon regions to a range of neighboring genes besides the nearest one, thus facilitating the study of functional non-coding elements\cite{yang14}. Then the \texttt{gene2pathway} summarizes gene-level measurements to pathway-level scores, comparing the quantity of significance for gene members within a pathway with those outside a pathway. It implements an improved FAIME algorithm together with other three conventional gene-set enrichment analysis methods\cite{yang12}. The output of \texttt{seq2pathway} is a general structured pathway scores, thus allowing one to functionally interpret phenotype-associated significance of genomic regions derived by next generational sequencing experiments.   
+%------------------------------------
+\subsection{Cite seq2pathway}
+%-------------------------------------
+This free open-source software implements academic research
+by the authors and NIH fundings.  If you use it, please support
+the project by citing the journal article below:\\
+\\
+\texttt{Seq2pathway: an R/Bioconductor package for pathway analysis of next-generation sequencing data.}\\
+Wang B, Cunningham JM, Holly Yang X.\\
+Bioinformatics. 2015 May 15. pii: btv289. \\
+PMID: 25979472 
 
 %section2: installation
 %-------------------------------------------

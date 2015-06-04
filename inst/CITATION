@@ -1,0 +1,13 @@
+citEntry(entry="Article",
+  author ="Wang B, Cunningham JM, Yang XH",
+title ="Seq2pathway: an R/Bioconductor package for pathway analysis of next-generation sequencing data",
+  journal =      "Bioinformatics",
+  volume =       " ",
+  year =         "2015", 
+  pages =        " ",
+  url =          "http://bioinformatics.oxfordjournals.org/content/early/2015/05/27/bioinformatics.btv289.full",
+  textVersion = paste(
+ "Seq2pathway: an R/Bioconductor package for pathway analysis of next-generation ",
+ "sequencing data", "Wang B, Cunningham JM, Yang XH",
+  "2015, Bioinformatics, May 15. pii: btv289")
+)

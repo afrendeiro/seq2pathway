@@ -1,3 +1,6 @@
+seq2pathway 1.1.2:
+- add citation
+
 seq2pathway 1.0.1:
 - add parameter UTR3 in function runseq2gene
 
