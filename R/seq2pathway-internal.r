@@ -698,20 +698,20 @@ runseq2gene <-
       if(ncol(test)==6){write.table(test[,c(6,1,2,3)], file=tmpinfile,sep="\t",quote=FALSE,row.names = FALSE)}
       if(ncol(test)>6){write.table(test[,c(6,1,2,3,7)], file=tmpinfile,sep="\t",quote=FALSE,row.names = FALSE)}
     }
-    tmpinfile = gsub("\\","/",tmpinfile,fixed =TRUE)
+    tmpinfile = gsub("/","/",tmpinfile,fixed =TRUE)
     tmpoutfile = tempfile()
     write.table(NULL, file=tmpoutfile,sep="\t",quote=FALSE,row.names = FALSE)
-    tmpoutfile = gsub("\\","/",tmpoutfile,fixed =TRUE)
+    tmpoutfile = gsub("/","/",tmpoutfile,fixed =TRUE)
 
     tmpoutfile_UTR3 = tempfile()
     write.table(NULL, file=tmpoutfile_UTR3,sep="\t",quote=FALSE,row.names = FALSE)
-    tmpoutfile_UTR3 = gsub("\\","/",tmpoutfile_UTR3,fixed =TRUE)
+    tmpoutfile_UTR3 = gsub("/","/",tmpoutfile_UTR3,fixed =TRUE)
     
     tmp_ref_file = tempfile()
     write.table(NULL, file=tmp_ref_file,sep="\t",quote=FALSE,row.names = FALSE)
-    tmp_ref_file = gsub("\\","/",tmp_ref_file,fixed =TRUE)
+    tmp_ref_file = gsub("/","/",tmp_ref_file,fixed =TRUE)
     
-    sink(paste(tempdir(),"\\",name,sep=""))
+    sink(paste(tempdir(),"/",name,sep=""))
     ###fixed headers import modules
     cat("import sys, string, math, shutil, math, os, gzip, time, glob, multiprocessing",sep="\n")
     cat("from shutil import rmtree",sep="\n")
@@ -747,7 +747,7 @@ runseq2gene <-
     sink()
     
     #invoke python
-    command <- paste("C:/Python27/python ", tempdir(),"\\",name,sep="")
+    command <- paste("python ", tempdir(),"/",name,sep="")
     response <- system(command, intern=TRUE)
     anno_result<-read.table(file=tmpoutfile_UTR3,header=TRUE,sep="\t")
     seq2gene_result=list()
